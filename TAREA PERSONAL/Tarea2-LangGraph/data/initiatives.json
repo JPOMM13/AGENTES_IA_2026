@@ -1,0 +1,83 @@
+[
+  {
+    "name": "Samsung Pay Visa",
+    "aliases": [
+      "samsung",
+      "samsung pay",
+      "samsung pay visa"
+    ],
+    "description": "Habilitación de tarjetas Visa en Samsung Pay.",
+    "objective": "Permitir la tokenización y uso seguro de tarjetas Visa.",
+    "scope": "API de tokenización, integración con Samsung Pay y validaciones.",
+    "status": "UAT",
+    "environment": "UAT",
+    "next_milestone": "Producción",
+    "owner": "Equipo Wallets",
+    "actors": [
+      "Negocio",
+      "Desarrollo",
+      "QA",
+      "Operaciones",
+      "Thales"
+    ],
+    "target_date": "2026-09-30",
+    "repository": "wallet-api",
+    "branch": "feature/samsung-pay",
+    "spec_id": "SPEC-SAMSUNG-001",
+    "blockers": [
+      "Ninguno crítico"
+    ]
+  },
+  {
+    "name": "Migración Azure DevOps a GitHub Actions",
+    "aliases": [
+      "github actions",
+      "migración azure devops"
+    ],
+    "description": "Migración de pipelines hacia GitHub Actions.",
+    "objective": "Estandarizar la integración y entrega continua.",
+    "scope": "Pipelines de build, pruebas y despliegue.",
+    "status": "En desarrollo",
+    "environment": "DEV",
+    "next_milestone": "UAT",
+    "owner": "Equipo DevOps",
+    "actors": [
+      "Desarrollo",
+      "DevOps",
+      "Seguridad"
+    ],
+    "target_date": "2026-10-31",
+    "repository": "devops-platform",
+    "branch": "feature/github-actions",
+    "spec_id": "SPEC-DEVOPS-001",
+    "blockers": [
+      "Falta validar secretos de despliegue"
+    ]
+  },
+  {
+    "name": "COFT Amex",
+    "aliases": [
+      "coft",
+      "coft amex"
+    ],
+    "description": "Implementación de credenciales almacenadas para Amex.",
+    "objective": "Procesar pagos recurrentes conforme al estándar COFT.",
+    "scope": "Servicio COFT, validaciones y auditoría.",
+    "status": "Análisis",
+    "environment": "DEV",
+    "next_milestone": "Desarrollo",
+    "owner": "Equipo Pagos",
+    "actors": [
+      "Negocio",
+      "Desarrollo",
+      "Amex"
+    ],
+    "target_date": "2026-11-30",
+    "repository": "coft-service",
+    "branch": "feature/coft-amex",
+    "spec_id": "SPEC-COFT-001",
+    "blockers": [
+      "Definición funcional pendiente"
+    ]
+  }
+]

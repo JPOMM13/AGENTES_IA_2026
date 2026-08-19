@@ -1,0 +1,11 @@
+[project]
+name = "mcp-iniciativas-personal"
+version = "0.1.0"
+description = "MCP Server personal para gestionar iniciativas y procedimientos con datos simulados."
+requires-python = ">=3.11"
+dependencies = [
+    "fastmcp>=2.0,<4.0"
+]
+
+[tool.uv]
+package = false

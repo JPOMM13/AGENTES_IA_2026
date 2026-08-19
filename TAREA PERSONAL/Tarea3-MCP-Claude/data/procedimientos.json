@@ -1,0 +1,54 @@
+[
+  {
+    "id": "PROC-001",
+    "nombre": "Pase a Producción",
+    "descripcion": "Flujo académico simulado para preparar y ejecutar un despliegue a producción.",
+    "pasos": [
+      "Validar aprobación de UAT.",
+      "Revisar evidencias funcionales y técnicas.",
+      "Confirmar aprobaciones requeridas.",
+      "Coordinar la ventana de despliegue.",
+      "Ejecutar el despliegue.",
+      "Realizar pruebas post producción.",
+      "Registrar el resultado y cerrar la actividad."
+    ],
+    "consideraciones": [
+      "No ejecutar un pase sin las aprobaciones requeridas.",
+      "Mantener evidencia de las validaciones realizadas."
+    ]
+  },
+  {
+    "id": "PROC-002",
+    "nombre": "Conexión a Teradata",
+    "descripcion": "Flujo académico simulado para validar una conexión técnica a Teradata.",
+    "pasos": [
+      "Confirmar que el usuario tiene acceso autorizado.",
+      "Validar credenciales y ambiente.",
+      "Configurar los parámetros de conexión.",
+      "Ejecutar una prueba de conectividad.",
+      "Ejecutar una consulta de prueba sin modificar datos.",
+      "Registrar evidencia del resultado."
+    ],
+    "consideraciones": [
+      "No almacenar contraseñas dentro del proyecto.",
+      "Usar únicamente ambientes y accesos autorizados."
+    ]
+  },
+  {
+    "id": "PROC-003",
+    "nombre": "Validación UAT",
+    "descripcion": "Flujo académico simulado para validar una iniciativa en ambiente UAT.",
+    "pasos": [
+      "Confirmar versión desplegada en UAT.",
+      "Ejecutar casos de prueba priorizados.",
+      "Registrar evidencias.",
+      "Consolidar defectos o desviaciones.",
+      "Revalidar correcciones.",
+      "Solicitar conformidad de UAT."
+    ],
+    "consideraciones": [
+      "La conformidad debe estar sustentada por evidencias.",
+      "Los defectos críticos deben resolverse antes del pase a producción."
+    ]
+  }
+]

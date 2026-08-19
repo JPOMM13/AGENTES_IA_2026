@@ -1,0 +1,6 @@
+[
+  {"initiative": "Samsung Pay Visa", "pending": ["Completar pruebas unitarias", "Configurar pipeline CI/CD", "Ejecutar pruebas QA"], "blockers": ["Ninguno crítico"], "next_step": "Completar pruebas antes de solicitar pase a producción", "dependencies": ["Aprobación de QA"], "functional_status": "Validación en UAT", "risks": ["Retraso si las pruebas encuentran defectos"]},
+  {"initiative": "Migración Azure DevOps a GitHub Actions", "pending": ["Completar workflow de pruebas", "Configurar despliegue"], "blockers": ["Secretos pendientes"], "next_step": "Validar el workflow de pruebas", "dependencies": ["Equipo de seguridad"], "functional_status": "En desarrollo", "risks": ["Configuración incorrecta de permisos"]},
+  {"initiative": "COFT Amex", "pending": ["Cerrar definición funcional", "Implementar API"], "blockers": ["Definición funcional pendiente"], "next_step": "Aprobar el contrato de API", "dependencies": ["Negocio y Amex"], "functional_status": "En análisis", "risks": ["Cambio de alcance"]}
+]
+

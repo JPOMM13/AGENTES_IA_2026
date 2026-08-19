@@ -1,0 +1,44 @@
+[
+  {
+    "id": "INI-001",
+    "nombre": "Samsung Pay Visa",
+    "descripcion": "Implementación simulada de una billetera digital para tarjetas Visa.",
+    "estado": "Producción",
+    "ambiente": "PRD",
+    "avance": 95,
+    "proximo_paso": "Realizar seguimiento post producción",
+    "responsable": "Equipo Medios de Pago",
+    "fecha_objetivo": "2026-08-20",
+    "bloqueos": [],
+    "ultima_actualizacion": "2026-08-14"
+  },
+  {
+    "id": "INI-002",
+    "nombre": "Migración DevOps a GitHub Actions",
+    "descripcion": "Migración simulada de pipelines de Azure DevOps hacia GitHub Actions.",
+    "estado": "Pruebas",
+    "ambiente": "UAT",
+    "avance": 80,
+    "proximo_paso": "Consolidar evidencias de UAT",
+    "responsable": "Equipo de Automatización",
+    "fecha_objetivo": "2026-08-28",
+    "bloqueos": [
+      "Pendiente validación final del pipeline de despliegue"
+    ],
+    "ultima_actualizacion": "2026-08-15",
+    "ultima_observacion": "Pruebas funcionales finalizadas"
+  },
+  {
+    "id": "INI-003",
+    "nombre": "COFT Amex",
+    "descripcion": "Implementación simulada de COFT Amex para billeteras digitales.",
+    "estado": "Desarrollo",
+    "ambiente": "DEV",
+    "avance": 55,
+    "proximo_paso": "Completar validaciones técnicas",
+    "responsable": "Equipo de Tokenización",
+    "fecha_objetivo": "2026-09-10",
+    "bloqueos": [],
+    "ultima_actualizacion": "2026-08-14"
+  }
+]
