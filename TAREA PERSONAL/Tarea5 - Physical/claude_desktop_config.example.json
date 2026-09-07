@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "caltrans-public-cameras": {
+      "command": "uv",
+      "args": [
+        "--directory",
+        "/Users/johnpaulmanchegomedina/Documents/PERSONAL/DIPLOMADO-UTEC/Agentes de IA/PROYECTO-FINAL-JOHN/AGENTES_IA_2026/TAREA PERSONAL/Tarea5 - Physical",
+        "run",
+        "server.py"
+      ]
+    }
+  }
+}

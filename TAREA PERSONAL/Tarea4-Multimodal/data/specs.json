@@ -1,0 +1,28 @@
+[
+  {
+    "id": "SPEC-SAMSUNG-001",
+    "requirements": [
+      {"id": "REQ-001", "name": "API de tokenización", "weight": 20, "criteria": ["Endpoint disponible", "Validación de request", "Manejo de errores"]},
+      {"id": "REQ-002", "name": "Integración Samsung Pay", "weight": 25, "criteria": ["Conexión con proveedor", "Respuesta procesada"]},
+      {"id": "REQ-003", "name": "Validación de criptograma", "weight": 20, "criteria": ["Criptograma validado", "Errores controlados"]},
+      {"id": "REQ-004", "name": "Pruebas unitarias", "weight": 20, "criteria": ["Casos principales", "Cobertura acordada"]},
+      {"id": "REQ-005", "name": "Pipeline CI/CD", "weight": 15, "criteria": ["Build automático", "Despliegue controlado"]}
+    ]
+  },
+  {
+    "id": "SPEC-DEVOPS-001",
+    "requirements": [
+      {"id": "DEV-001", "name": "Workflow de build", "weight": 40, "criteria": ["Compilación automática"]},
+      {"id": "DEV-002", "name": "Workflow de pruebas", "weight": 30, "criteria": ["Pruebas automáticas"]},
+      {"id": "DEV-003", "name": "Despliegue por ambiente", "weight": 30, "criteria": ["Aprobaciones configuradas"]}
+    ]
+  },
+  {
+    "id": "SPEC-COFT-001",
+    "requirements": [
+      {"id": "COFT-001", "name": "API de credenciales", "weight": 50, "criteria": ["Contrato definido"]},
+      {"id": "COFT-002", "name": "Auditoría de operaciones", "weight": 50, "criteria": ["Trazabilidad disponible"]}
+    ]
+  }
+]
+

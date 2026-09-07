@@ -1,0 +1,10 @@
+README.md
+camera_client.py
+pyproject.toml
+server.py
+caltrans_public_camera_mcp.egg-info/PKG-INFO
+caltrans_public_camera_mcp.egg-info/SOURCES.txt
+caltrans_public_camera_mcp.egg-info/dependency_links.txt
+caltrans_public_camera_mcp.egg-info/requires.txt
+caltrans_public_camera_mcp.egg-info/top_level.txt
+tests/test_camera_client.py

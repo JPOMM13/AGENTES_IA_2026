@@ -1,0 +1,36 @@
+[
+  {
+    "repository": "wallet-api", "branch": "feature/samsung-pay",
+    "last_commit": "feat: valida criptograma Samsung Pay", "commit_count": 18,
+    "pull_requests": ["PR-142 en revisión"],
+    "modified_files": ["src/tokenization/service.py", "src/crypto/validator.py"],
+    "tests": "Pruebas unitarias parciales",
+    "evidence": [
+      {"requirement_id": "REQ-001", "status": "completed", "evidence": ["src/tokenization/service.py", "tests/test_tokenization.py"]},
+      {"requirement_id": "REQ-002", "status": "completed", "evidence": ["src/wallets/samsung.py"]},
+      {"requirement_id": "REQ-003", "status": "completed", "evidence": ["src/crypto/validator.py"]},
+      {"requirement_id": "REQ-004", "status": "partial", "evidence": ["tests/test_tokenization.py"]},
+      {"requirement_id": "REQ-005", "status": "pending", "evidence": []}
+    ]
+  },
+  {
+    "repository": "devops-platform", "branch": "feature/github-actions",
+    "last_commit": "ci: agrega workflow de build", "commit_count": 7,
+    "pull_requests": [], "modified_files": [".github/workflows/build.yml"], "tests": "Workflow en validación",
+    "evidence": [
+      {"requirement_id": "DEV-001", "status": "completed", "evidence": [".github/workflows/build.yml"]},
+      {"requirement_id": "DEV-002", "status": "partial", "evidence": [".github/workflows/test.yml"]},
+      {"requirement_id": "DEV-003", "status": "pending", "evidence": []}
+    ]
+  },
+  {
+    "repository": "coft-service", "branch": "feature/coft-amex",
+    "last_commit": "docs: contrato inicial COFT", "commit_count": 2,
+    "pull_requests": [], "modified_files": ["docs/api.md"], "tests": "Sin pruebas todavía",
+    "evidence": [
+      {"requirement_id": "COFT-001", "status": "partial", "evidence": ["docs/api.md"]},
+      {"requirement_id": "COFT-002", "status": "pending", "evidence": []}
+    ]
+  }
+]
+
