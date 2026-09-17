@@ -1,0 +1,21 @@
+........................................................................ [ 91%]
+.......                                                                  [100%]
+=============================== warnings summary ===============================
+.venv/lib/python3.14/site-packages/deepeval/tracing/tracing.py:1555: 471 warnings
+tests/security/test_deepteam_contract.py: 344 warnings
+tests/security/test_security.py: 2 warnings
+  /Users/johnpaulmanchegomedina/Documents/PERSONAL/DIPLOMADO-UTEC/Agentes de IA/PROYECTO-FINAL-JOHN/AGENTES_IA_2026/PROYECTO FINAL/Tarea - Seguridad/.venv/lib/python3.14/site-packages/deepeval/tracing/tracing.py:1555: DeprecationWarning: 'asyncio.iscoroutinefunction' is deprecated and slated for removal in Python 3.16; use inspect.iscoroutinefunction() instead
+    if asyncio.iscoroutinefunction(func):
+
+tests/security/test_deepteam_contract.py::test_deepteam_runs_and_exports_with_fixture_models
+tests/security/test_deepteam_contract.py::test_deepteam_runs_and_exports_with_fixture_models
+  /Users/johnpaulmanchegomedina/Documents/PERSONAL/DIPLOMADO-UTEC/Agentes de IA/PROYECTO-FINAL-JOHN/AGENTES_IA_2026/PROYECTO FINAL/Tarea - Seguridad/.venv/lib/python3.14/site-packages/deepteam/metrics/base_red_teaming_metric.py:4: DeprecationWarning: 'LLMTestCaseParams' is deprecated and will be removed in a future release. Use 'SingleTurnParams' instead.
+    from deepeval.test_case import LLMTestCaseParams
+
+tests/security/test_deepteam_contract.py::test_deepteam_runs_and_exports_with_fixture_models
+tests/security/test_deepteam_contract.py::test_deepteam_runs_and_exports_with_fixture_models
+  /Users/johnpaulmanchegomedina/Documents/PERSONAL/DIPLOMADO-UTEC/Agentes de IA/PROYECTO-FINAL-JOHN/AGENTES_IA_2026/PROYECTO FINAL/Tarea - Seguridad/.venv/lib/python3.14/site-packages/deepteam/red_teamer/utils.py:6: DeprecationWarning: 'GPTModel' is deprecated and will be removed in a future release. Use 'OpenAIModel' instead.
+    from deepeval.models import (
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+79 passed, 821 warnings in 2.89s

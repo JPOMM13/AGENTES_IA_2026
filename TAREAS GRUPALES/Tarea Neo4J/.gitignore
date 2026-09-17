@@ -1,0 +1,8 @@
+.env
+.venv/
+.idea/
+__pycache__/
+*.pyc
+neo4j/
+docs/grafo_eventos.html
+docs/grafo_eventos_datos.html

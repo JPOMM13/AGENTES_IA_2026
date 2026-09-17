@@ -1,0 +1,27 @@
+{
+  "source": "/Users/johnpaulmanchegomedina/Documents/PERSONAL/DIPLOMADO-UTEC/Agentes de IA/PROYECTO-FINAL-JOHN/AGENTES_IA_2026/PROYECTO FINAL/Tarea - Evaluacion.zip",
+  "zip_sha256": "0a59f80c2d209ba5cf4b54464af9a8ec7be67c3be87f48cc28a75a626202979d",
+  "files": {
+    "langsmith_evaluator.py": "599e8d9f2a42b379c5ebbe9ed7013e9dbd465d83b4cb9dd02a1e988e0d7f23b7",
+    "config.py": "8bea0442230d2d7846fca949a74863fb2adb1c75540328831ef3a1f1742abd4b",
+    "requirements.txt": "f0248929e68b87b0824d035ccb9a74ec5f5eae568f4aa3792ae8724ff2d439b6",
+    "team.py": "b4c300cfbb099becd3d2684ea540ab68ed310aeedad11333c59fb7015869117b",
+    "README.md": "34fefca77d607f5089078e1271a14e34f1507e8417d027713331ebea4bc8d1c8",
+    "app.py": "40372af567b255f048261a862e37d7dd968f1983b03edb32b1b84e5b45ff52d9",
+    "requirements-lock.txt": "508dfff60f733648f47757c931051b51be6e9c704ae024d18d11624b801de35f",
+    "tests/test_rules.py": "a53b249d673a6a25e0c81e91059a1a05f7032c7b4d6b8f22b61ed37b9d71d38b",
+    "repositories/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "repositories/json_repository.py": "f2a1e44780a31bb9a5f4e006ca30d65aa9e4d1ebdec7d8891f9bd55428784046",
+    "repositories/base.py": "d7bf86ab3c9933ed4fd13660438477253b10735fe3acb1417cba8e07031c85c0",
+    "agent/tools.py": "b5ea166ccff16f95ad414df9dcfd97a63a772493771b20c76993748fba16810e",
+    "agent/graph.py": "de3697cf687689022cb43b6eaba13e77d21b9bc38e40be43d3173610b2dc9a39",
+    "agent/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "agent/prompts.py": "b75183ea45401f5ecc16936da18cbe51235089ab09e5d1909cb51e40999c9cfc",
+    "agent/state.py": "4f1f50092b2b4e11b83f0697ab9bb59d033fd749cb713b231de781917b984348",
+    "evaluation/run_evaluation.py": "1faba2cdb8b52aec39a7bbae6479d6e98a7fe12dcc05a0896cc408f6660a9d91",
+    "evaluation/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "evaluation/dataset.py": "0a0b0c5690a994782a35dea8740f825dc0a1add7ac2ccadb16a60073bd73b2b9",
+    "evaluation/evaluators.py": "f2016eaa5832c3b1e365d17b5e5135f91f12b8502e76d00180aab354e9785707",
+    "data/mock_data_eventos.json": "be1066adcc1eae8fea22be9eb47fe8a208e974f9a070d4e803b2dbdd7782a94a"
+  }
+}

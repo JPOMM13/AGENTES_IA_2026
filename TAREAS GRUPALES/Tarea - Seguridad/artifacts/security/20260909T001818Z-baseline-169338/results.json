@@ -1,0 +1,12 @@
+[
+  {
+    "id": "SEC-01-a",
+    "risk": "SEC-01",
+    "kind": "adversarial",
+    "source": "fixed",
+    "status": "not_run",
+    "turns": [],
+    "failures": [],
+    "errors": []
+  }
+]

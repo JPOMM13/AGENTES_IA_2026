@@ -1,0 +1,6 @@
+-r requirements.txt
+# API de callback y exportación verificadas con estas versiones.
+deepteam==1.0.9
+deepeval==4.2.2
+sentry-sdk==2.69.1
+pip-audit==2.10.1
