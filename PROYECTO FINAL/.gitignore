@@ -1,0 +1,8 @@
+.DS_Store
+__pycache__/
+*.pyc
+.venv/
+.env
+app/data/mock_session_memory.json
+app/data/mock_redis_session.json
+app/data/generated/

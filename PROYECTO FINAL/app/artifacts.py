@@ -1,0 +1,265 @@
+from __future__ import annotations
+
+import base64
+import html
+import json
+import re
+from pathlib import Path
+from typing import Any
+from urllib.error import HTTPError, URLError
+from urllib.request import Request, urlopen
+
+from app.llm_config import obtener_configuracion_generacion_imagen
+
+
+ARTIFACT_DIR = Path(__file__).resolve().parent / "data" / "generated"
+
+
+# Ejecuta la responsabilidad de generar artefacto visual cotizacion.
+def generar_artefacto_visual_cotizacion(state: Any) -> str:
+    """Genera la imagen visual de la cotizacion y devuelve su ruta."""
+    if not state.quote:
+        return ""
+    ARTIFACT_DIR.mkdir(parents=True, exist_ok=True)
+
+    # PRUEBAS DE FLUJO: SE COMENTA LA LLAMADA A OPENAI IMAGES PARA NO CONSUMIR API.
+    # AL ESTAR COMENTADO, LA APP USA EL SVG MOCK LOCAL GENERADO MAS ABAJO.
+    # image_path = generar_imagen_multimodal_evento(state)
+    # if image_path:
+    #     return image_path
+
+    # MOCK: RESPALDO LOCAL CUANDO NO HAY PROVEEDOR MULTIMODAL CONFIGURADO.
+    # EN PRODUCCION ESTO DEBERIA SER UNA IMAGEN GENERADA POR EL PROVEEDOR DE IA O UN ASSET GUARDADO EN STORAGE.
+    quote_id = state.quote.get("quote_id", "quote")
+    filename = f"{nombre_archivo_seguro(quote_id)}_{nombre_archivo_seguro(state.session_id[:8])}.svg"
+    path = ARTIFACT_DIR / filename
+    path.write_text(construir_svg_cotizacion(state), encoding="utf-8")
+    return str(path)
+
+
+# Ejecuta la responsabilidad de refrescar artefacto visual si es necesario.
+def refrescar_artefacto_visual_si_es_necesario(state: Any) -> str:
+    """Regenera un SVG viejo como PNG cuando la imagen multimodal ya esta activa."""
+    if not state.quote:
+        return ""
+    current_path = Path(state.quote_artifact_image or "")
+    config = obtener_configuracion_generacion_imagen()
+    if current_path.suffix.lower() == ".png" and current_path.exists():
+        return str(current_path)
+    if not config.listo:
+        return str(current_path) if state.quote_artifact_image else ""
+
+    image_path = generar_imagen_multimodal_evento(state)
+    if image_path:
+        state.quote_artifact_image = image_path
+    return state.quote_artifact_image or ""
+
+
+# Ejecuta la responsabilidad de generar imagen multimodal evento.
+def generar_imagen_multimodal_evento(state: Any) -> str:
+    """Llama al proveedor multimodal configurado y guarda un PNG del evento."""
+    config = obtener_configuracion_generacion_imagen()
+    if not config.listo:
+        state.registrar_log(
+            "generate_multimodal_event_image_skipped",
+            {"reason": "IMAGE_GENERATION_ENABLED apagado o API key no configurada"},
+        )
+        return ""
+
+    prompt = construir_prompt_imagen_evento(state)
+    quote_id = state.quote.get("quote_id", "quote")
+    filename = f"{nombre_archivo_seguro(quote_id)}_{nombre_archivo_seguro(state.session_id[:8])}.png"
+    path = ARTIFACT_DIR / filename
+
+    try:
+        # MOCK: EN ESTA POC SOLO SE ENVIA EL PROMPT A OPENAI IMAGES.
+        # EN PRODUCCION EL PROMPT Y LA IMAGEN GENERADA PUEDEN AUDITARSE EN STORAGE/POSTGRES.
+        payload = {
+            "model": config.model,
+            "prompt": prompt,
+            "n": 1,
+            "size": config.size,
+            "quality": config.quality,
+        }
+        request = Request(
+            config.url_imagen,
+            data=json.dumps(payload).encode("utf-8"),
+            headers={
+                "Authorization": f"Bearer {config.api_key}",
+                "Content-Type": "application/json",
+            },
+            method="POST",
+        )
+        with urlopen(request, timeout=config.timeout_seconds) as response:
+            response_data = json.loads(response.read().decode("utf-8"))
+
+        b64_data = response_data["data"][0].get("b64_json")
+        if not b64_data:
+            state.registrar_log("generate_multimodal_event_image_empty", {"provider": config.provider})
+            return ""
+
+        path.write_bytes(base64.b64decode(b64_data))
+        state.registrar_log("generar_imagen_multimodal_evento", {"path": str(path), "provider": config.provider, "model": config.model})
+        return str(path)
+    except (HTTPError, URLError, TimeoutError, KeyError, ValueError) as exc:
+        state.registrar_log("generate_multimodal_event_image_error", {"error": str(exc), "provider": config.provider})
+        return ""
+
+
+# Ejecuta la responsabilidad de construir prompt imagen evento.
+def construir_prompt_imagen_evento(state: Any) -> str:
+    """Construye un prompt visual realista basado solo en la cotizacion validada."""
+    event_type = state.event_type or "evento social"
+    attendees = state.attendees or "varias"
+    district = state.district or "Lima"
+    event_date = state.event_date or "fecha por confirmar"
+    products = nombres_productos_cotizacion(state)
+    visual_elements = describir_productos_para_imagen(products)
+    services = describir_servicios_para_imagen(state)
+
+    return (
+        "Genera una imagen fotografica realista, horizontal y profesional de un evento cotizado. "
+        f"Tipo de evento: {event_type}. Cantidad de asistentes: {attendees}. "
+        f"Lugar referencial: {district}, Lima. Fecha referencial: {event_date}. "
+        f"Debe verse como una escena real del evento, no como una tarjeta grafica ni una infografia. "
+        f"Incluye de forma natural estos productos o servicios cotizados: {visual_elements}{services}. "
+        "Muestra mesas, ambiente de recepcion, estacion de bebidas o barra si corresponde, iluminacion calida, "
+        "personas conversando de fondo sin rostros protagonistas, decoracion coherente con el tipo de evento. "
+        "No agregues texto, precios, logos, marcas, etiquetas, iconos, diagramas, screenshots ni elementos abstractos."
+    )
+
+
+# Ejecuta la responsabilidad de describir productos para imagen.
+def describir_productos_para_imagen(products: list[str]) -> str:
+    """Convierte productos cotizados en elementos visuales para el prompt."""
+    if not products:
+        return "productos de catering por confirmar"
+
+    catalog = {
+        "cerveza": "cervezas frias en botellas o latas sobre una barra",
+        "vino": "botellas de vino y copas servidas",
+        "ron": "botellas de ron en una estacion de licores",
+        "gaseosa": "botellas de gaseosa en una mesa de bebidas",
+        "agua": "botellas de agua mineral",
+        "hielo": "cubetas con hielo para bebidas",
+        "bar": "barra movil elegante para bebidas",
+        "bartender": "bartender atendiendo discretamente la barra",
+    }
+    descriptions = []
+    for product in products:
+        normalized = normalizar_nombre_producto(product)
+        descriptions.append(catalog.get(normalized, product))
+    return ", ".join(descriptions[:8])
+
+
+# Ejecuta la responsabilidad de describir servicios para imagen.
+def describir_servicios_para_imagen(state: Any) -> str:
+    """Agrega servicios recomendados del paquete si existen en la cotizacion."""
+    option = state.recommended_option or {}
+    services = option.get("services") or []
+    if not services:
+        return ""
+    visible_services = ", ".join(str(service) for service in services[:4])
+    return f", ademas de servicios como {visible_services}"
+
+
+# Ejecuta la responsabilidad de construir svg cotizacion.
+def construir_svg_cotizacion(state: Any) -> str:
+    """Construye el SVG con datos del evento, productos y totales."""
+    event_type = html.escape(str(state.event_type or "evento"))
+    district = html.escape(str(state.district or "distrito pendiente"))
+    event_date = html.escape(str(state.event_date or "fecha pendiente"))
+    attendees = html.escape(str(state.attendees or "pendiente"))
+    products = nombres_productos_cotizacion(state)
+    product_text = html.escape(", ".join(products[:5]) if products else "productos por confirmar")
+    total = html.escape(f"{state.quote.get('currency', 'PEN')} {state.quote.get('total', 0):.2f}")
+    title = html.escape((state.recommended_option or {}).get("name", "Cotizacion de evento"))
+    product_chips = renderizar_chips_productos(products)
+    return f"""<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="760" viewBox="0 0 1200 760">
+  <defs>
+    <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0%" stop-color="#111827"/>
+      <stop offset="55%" stop-color="#1f2937"/>
+      <stop offset="100%" stop-color="#3f2f1f"/>
+    </linearGradient>
+    <linearGradient id="table" x1="0" x2="1">
+      <stop offset="0%" stop-color="#f8fafc"/>
+      <stop offset="100%" stop-color="#e5e7eb"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="760" fill="url(#bg)"/>
+  <circle cx="160" cy="120" r="70" fill="#f59e0b" opacity="0.22"/>
+  <circle cx="1030" cy="120" r="95" fill="#ef4444" opacity="0.16"/>
+  <rect x="120" y="235" width="960" height="300" rx="18" fill="url(#table)" opacity="0.96"/>
+  <rect x="170" y="280" width="860" height="42" rx="21" fill="#d1d5db"/>
+  <circle cx="300" cy="382" r="42" fill="#7c2d12"/>
+  <circle cx="440" cy="382" r="42" fill="#991b1b"/>
+  <circle cx="580" cy="382" r="42" fill="#1d4ed8"/>
+  <circle cx="720" cy="382" r="42" fill="#047857"/>
+  <circle cx="860" cy="382" r="42" fill="#92400e"/>
+  <rect x="210" y="465" width="780" height="22" rx="11" fill="#9ca3af"/>
+  <text x="90" y="86" fill="#ffffff" font-family="Arial, sans-serif" font-size="42" font-weight="700">{title}</text>
+  <text x="90" y="136" fill="#e5e7eb" font-family="Arial, sans-serif" font-size="25">{event_type} para {attendees} personas</text>
+  <text x="90" y="174" fill="#d1d5db" font-family="Arial, sans-serif" font-size="22">{district} · {event_date}</text>
+  <text x="90" y="620" fill="#ffffff" font-family="Arial, sans-serif" font-size="28" font-weight="700">Productos y servicios cotizados</text>
+  <text x="90" y="660" fill="#e5e7eb" font-family="Arial, sans-serif" font-size="22">{product_text}</text>
+  {product_chips}
+  <rect x="820" y="584" width="290" height="96" rx="18" fill="#ffffff" opacity="0.95"/>
+  <text x="850" y="624" fill="#374151" font-family="Arial, sans-serif" font-size="20">Total referencial</text>
+  <text x="850" y="664" fill="#111827" font-family="Arial, sans-serif" font-size="34" font-weight="700">{total}</text>
+</svg>
+"""
+
+
+# Ejecuta la responsabilidad de nombres productos cotizacion.
+def nombres_productos_cotizacion(state: Any) -> list[str]:
+    """Obtiene nombres visibles desde detalles de cotizacion o productos solicitados."""
+    if state.quote:
+        names = []
+        for item in state.quote.get("details", []):
+            names.append(str(item.get("product_name") or item.get("concept") or "item"))
+        if names:
+            return names
+    return list(state.requested_products)
+
+
+# Ejecuta la responsabilidad de renderizar chips productos.
+def renderizar_chips_productos(products: list[str]) -> str:
+    """Dibuja chips dentro del SVG para los principales productos."""
+    chips = []
+    for index, product in enumerate(products[:4]):
+        x = 90 + index * 175
+        label = html.escape(product[:18])
+        chips.append(
+            f'<rect x="{x}" y="690" width="150" height="38" rx="19" fill="#f59e0b" opacity="0.92"/>'
+            f'<text x="{x + 18}" y="715" fill="#111827" font-family="Arial, sans-serif" font-size="16" font-weight="700">{label}</text>'
+        )
+    return "\n  ".join(chips)
+
+
+# Ejecuta la responsabilidad de nombre archivo seguro.
+def nombre_archivo_seguro(value: str) -> str:
+    """Normaliza texto para usarlo como nombre de archivo."""
+    return re.sub(r"[^a-zA-Z0-9_-]+", "_", value).strip("_") or "artifact"
+
+
+# Ejecuta la responsabilidad de normalizar nombre producto.
+def normalizar_nombre_producto(value: str) -> str:
+    """Normaliza nombres para mapearlos a descripciones visuales."""
+    value = value.lower().strip()
+    replacements = {
+        "cerveza artesanal lata": "cerveza",
+        "vino tinto reserva": "vino",
+        "ron anejo botella": "ron",
+        "gaseosa 1.5l": "gaseosa",
+        "agua mineral 625ml": "agua",
+        "bolsa de hielo": "hielo",
+        "bar movil premium": "bar",
+        "bartender por evento": "bartender",
+    }
+    if value in replacements:
+        return replacements[value]
+    for key in ["cerveza", "vino", "ron", "gaseosa", "agua", "hielo", "bar", "bartender"]:
+        if key in value:
+            return key
+    return value

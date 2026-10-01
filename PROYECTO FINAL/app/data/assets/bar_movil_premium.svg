@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 420" role="img" aria-label="Bar movil premium">
+  <rect width="640" height="420" fill="#17324d"/>
+  <rect x="44" y="58" width="552" height="304" rx="18" fill="#f7f3ea"/>
+  <rect x="86" y="226" width="468" height="86" rx="10" fill="#23395b"/>
+  <rect x="120" y="178" width="76" height="112" rx="8" fill="#d79b31"/>
+  <rect x="222" y="151" width="42" height="138" rx="6" fill="#8dc3d9"/>
+  <rect x="290" y="135" width="42" height="154" rx="6" fill="#e35d5b"/>
+  <rect x="358" y="160" width="42" height="129" rx="6" fill="#98b06f"/>
+  <rect x="446" y="188" width="72" height="101" rx="8" fill="#d79b31"/>
+  <circle cx="162" cy="139" r="31" fill="#23395b"/>
+  <circle cx="483" cy="143" r="31" fill="#23395b"/>
+  <text x="320" y="86" text-anchor="middle" font-family="Arial, sans-serif" font-size="30" font-weight="700" fill="#23395b">Bar movil premium</text>
+  <text x="320" y="345" text-anchor="middle" font-family="Arial, sans-serif" font-size="22" fill="#f7f3ea">Evento con barra, bartender y bebidas base</text>
+</svg>

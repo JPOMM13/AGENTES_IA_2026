@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 420" role="img" aria-label="Pack celebracion esencial">
+  <rect width="640" height="420" fill="#214f46"/>
+  <circle cx="108" cy="86" r="32" fill="#f0c05a"/>
+  <circle cx="532" cy="330" r="42" fill="#f0c05a"/>
+  <rect x="70" y="116" width="500" height="228" rx="16" fill="#fbf7ef"/>
+  <rect x="142" y="184" width="74" height="114" rx="9" fill="#f0c05a"/>
+  <rect x="258" y="155" width="74" height="143" rx="9" fill="#e0524d"/>
+  <rect x="374" y="174" width="74" height="124" rx="9" fill="#5ea8a7"/>
+  <text x="320" y="89" text-anchor="middle" font-family="Arial, sans-serif" font-size="30" font-weight="700" fill="#fbf7ef">Pack celebracion esencial</text>
+  <text x="320" y="333" text-anchor="middle" font-family="Arial, sans-serif" font-size="22" fill="#214f46">Bebidas, hielo y gaseosas para reuniones</text>
+</svg>

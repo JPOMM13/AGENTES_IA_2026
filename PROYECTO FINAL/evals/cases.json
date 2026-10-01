@@ -1,0 +1,111 @@
+[
+  {
+    "name": "fecha_2027_y_asistentes_en_turno_siguiente",
+    "messages": [
+      "Quiero una cotizacion para un evento de matrimonio, para el 24 de febrero del 2027 en Miraflores, mi nombre es John Manchego y mi numero de celular es 989515182",
+      "80"
+    ],
+    "expected": {
+      "event_type": "matrimonio",
+      "event_date": "2027-02-24",
+      "attendees": 80,
+      "district": "Miraflores",
+      "customer_name": "John Manchego",
+      "contact": "989515182",
+      "missing_fields": ["requested_products"],
+      "quote_generated": false,
+      "handoff_confirmed": false,
+      "last_response_contains": ["Productos disponibles para elegir"]
+    }
+  },
+  {
+    "name": "producto_no_disponible_sugiere_alternativa_y_reemplaza",
+    "messages": [
+      "Soy John Manchego, mi telefono es 989515182. Necesito whisky economico para un matrimonio de 34 personas el 25 de octubre en Miraflores",
+      "entonces reemplazalo por vino"
+    ],
+    "expected": {
+      "requested_products": ["vino"],
+      "unsupported_requested_products": [],
+      "recommended_source": "products",
+      "quote_generated": false,
+      "handoff_confirmed": false,
+      "last_response_contains": ["Productos considerados", "Vino tinto reserva"]
+    }
+  },
+  {
+    "name": "stock_insuficiente_reemplazo_implicito",
+    "messages": [
+      "Soy John Manchego, mi telefono es 989515182. Necesito cerveza vino agua y hielo para un matrimonio de 100 personas el 25 de octubre en Miraflores",
+      "cambialo por gaseosa"
+    ],
+    "expected": {
+      "requested_products": ["cerveza", "vino", "hielo", "gaseosa"],
+      "not_requested_products": ["agua"],
+      "stock_shortage_products": [],
+      "availability_ok": true,
+      "recommended_source": "products",
+      "handoff_confirmed": false,
+      "last_response_contains": ["Productos considerados", "Gaseosa 1.5L"]
+    }
+  },
+  {
+    "name": "derivacion_humana_solo_explicita",
+    "messages": [
+      "es un matrimonio",
+      "es para 20 personas"
+    ],
+    "expected": {
+      "event_type": "matrimonio",
+      "attendees": 20,
+      "handoff_confirmed": false,
+      "stage": "recoleccion",
+      "last_response_not_contains": ["WhatsApp", "derivacion", "derivación"]
+    }
+  },
+  {
+    "name": "precio_informativo_no_genera_cotizacion",
+    "messages": [
+      "Cuanto cuesta el vino?"
+    ],
+    "expected": {
+      "quote_generated": false,
+      "handoff_confirmed": false,
+      "last_response_contains": ["Vino tinto reserva", "sin generar cotizacion"]
+    }
+  },
+  {
+    "name": "cotizacion_formal_despues_de_recomendacion",
+    "messages": [
+      "Soy Juan Perez, mi telefono es 999888777. Necesito bar movil premium para un matrimonio de 100 personas el 25 de octubre en Miraflores",
+      "genera la cotizacion"
+    ],
+    "expected": {
+      "recommended_id": "PKG-BAR-100",
+      "quote_generated": true,
+      "quote_total": 3304.0,
+      "handoff_confirmed": false,
+      "last_response_contains": ["Cotizacion mock"]
+    }
+  },
+  {
+    "name": "retoma_conversacion_anterior_por_identidad",
+    "setup_messages": [
+      "Soy John Manchego, mi telefono es 989515182. Necesito cerveza y vino para un matrimonio de 45 personas el 23 de diciembre en Miraflores"
+    ],
+    "messages": [
+      "quiero retomar mi cotizacion anterior, soy John Manchego mi numero es 989515182"
+    ],
+    "expected": {
+      "event_type": "matrimonio",
+      "attendees": 45,
+      "event_date": "2026-12-23",
+      "district": "Miraflores",
+      "customer_name": "John Manchego",
+      "contact": "989515182",
+      "requested_products": ["cerveza", "vino"],
+      "handoff_confirmed": false,
+      "last_response_contains": ["retome la ultima cotizacion", "Productos/servicios: cerveza, vino"]
+    }
+  }
+]
