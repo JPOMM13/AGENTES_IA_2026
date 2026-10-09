@@ -1,10 +1,10 @@
 from app.estado import EstadoCotizacion
-from app.agentic_decider import obtener_disponibilidad_tools
-from app.tools.availability import mock_validar_disponibilidad
-from app.tools.availability import mock_validar_stock_productos
-from app.tools.catalog import mock_buscar_catalogo
-from app.tools.coverage import mock_validar_cobertura
-from app.tools.dimensioning import mock_dimensionar_evento
+from app.decisor_agentico import obtener_disponibilidad_tools
+from app.tools.disponibilidad import mock_validar_disponibilidad
+from app.tools.disponibilidad import mock_validar_stock_productos
+from app.tools.catalogo import mock_buscar_catalogo
+from app.tools.cobertura import mock_validar_cobertura
+from app.tools.dimensionamiento import mock_dimensionar_evento
 
 
 # Prueba el comportamiento de test catalogo encuentra opcion matrimonio.

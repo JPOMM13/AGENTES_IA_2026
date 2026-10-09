@@ -9,13 +9,13 @@ from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
-from app.llm_config import obtener_configuracion_generacion_imagen
+from app.configuracion_llm import obtener_configuracion_generacion_imagen
 
 
 ARTIFACT_DIR = Path(__file__).resolve().parent / "data" / "generated"
 
 
-# Ejecuta la responsabilidad de generar artefacto visual cotizacion.
+# ARTEFACTO MULTIMODAL: genera o reutiliza la imagen visual asociada a la cotizacion final.
 def generar_artefacto_visual_cotizacion(estado: Any) -> str:
     """Genera la imagen visual de la cotizacion y devuelve su ruta."""
     if not estado.cotizacion:
@@ -37,7 +37,7 @@ def generar_artefacto_visual_cotizacion(estado: Any) -> str:
     return str(path)
 
 
-# Ejecuta la responsabilidad de refrescar artefacto visual si es necesario.
+# ARTEFACTO MULTIMODAL: regenera imagen solo si la cotizacion cambia o no existe artefacto.
 def refrescar_artefacto_visual_si_es_necesario(estado: Any) -> str:
     """Regenera un SVG viejo como PNG cuando la imagen multimodal ya esta activa."""
     if not estado.cotizacion:
@@ -55,7 +55,7 @@ def refrescar_artefacto_visual_si_es_necesario(estado: Any) -> str:
     return estado.imagen_artefacto_cotizacion or ""
 
 
-# Ejecuta la responsabilidad de generar imagen multimodal evento.
+# MULTIMODAL/IMAGEN: punto donde se llamaria a la API de imagen; ahora puede usar mock si esta comentada.
 def generar_imagen_multimodal_evento(estado: Any) -> str:
     """Llama al proveedor multimodal configurado y guarda un PNG del evento."""
     estado.registrar_log("generar_imagen_multimodal_evento", {"mensaje": "IMAGEN MOCK NO GENERADA"})
@@ -110,7 +110,7 @@ def generar_imagen_multimodal_evento(estado: Any) -> str:
     #     return ""
 
 
-# Ejecuta la responsabilidad de construir prompt imagen evento.
+# PROMPT MULTIMODAL: describe evento, productos y servicios para generar una imagen coherente.
 def construir_prompt_imagen_evento(estado: Any) -> str:
     """Construye un prompt visual realista basado solo en la cotizacion validada."""
     tipo_evento = estado.tipo_evento or "evento social"
@@ -133,7 +133,7 @@ def construir_prompt_imagen_evento(estado: Any) -> str:
     )
 
 
-# Ejecuta la responsabilidad de describir productos para imagen.
+# PROMPT MULTIMODAL: traduce productos cotizados a una descripcion visual para la imagen.
 def describir_productos_para_imagen(products: list[str]) -> str:
     """Convierte productos cotizados en elementos visuales para el prompt."""
     if not products:
@@ -156,7 +156,7 @@ def describir_productos_para_imagen(products: list[str]) -> str:
     return ", ".join(descriptions[:8])
 
 
-# Ejecuta la responsabilidad de describir servicios para imagen.
+# PROMPT MULTIMODAL: agrega servicios cotizados al contexto visual del evento.
 def describir_servicios_para_imagen(estado: Any) -> str:
     """Agrega servicios recomendados del paquete si existen en la cotizacion."""
     option = estado.opcion_recomendada or {}
@@ -167,7 +167,7 @@ def describir_servicios_para_imagen(estado: Any) -> str:
     return f", ademas de servicios como {visible_services}"
 
 
-# Ejecuta la responsabilidad de construir svg cotizacion.
+# IMAGEN MOCK: construye SVG local cuando no se usa API multimodal real.
 def construir_svg_cotizacion(estado: Any) -> str:
     """Construye el SVG con datos del evento, productos y totales."""
     tipo_evento = html.escape(str(estado.tipo_evento or "evento"))
@@ -215,7 +215,7 @@ def construir_svg_cotizacion(estado: Any) -> str:
 """
 
 
-# Ejecuta la responsabilidad de nombres productos cotizacion.
+# ARTEFACTO VISUAL: obtiene productos cotizados para mostrarlos en imagen o resumen.
 def nombres_productos_cotizacion(estado: Any) -> list[str]:
     """Obtiene nombres visibles desde detalles de cotizacion o productos solicitados."""
     if estado.cotizacion:
@@ -227,7 +227,7 @@ def nombres_productos_cotizacion(estado: Any) -> list[str]:
     return list(estado.productos_solicitados)
 
 
-# Ejecuta la responsabilidad de renderizar chips productos.
+# ARTEFACTO VISUAL: renderiza etiquetas de productos dentro del SVG mock.
 def renderizar_chips_productos(products: list[str]) -> str:
     """Dibuja chips dentro del SVG para los principales productos."""
     chips = []
@@ -241,13 +241,13 @@ def renderizar_chips_productos(products: list[str]) -> str:
     return "\n  ".join(chips)
 
 
-# Ejecuta la responsabilidad de nombre archivo seguro.
+# ARTEFACTO VISUAL: normaliza nombres de archivo para guardar imagenes sin caracteres problematicos.
 def nombre_archivo_seguro(value: str) -> str:
     """Normaliza texto para usarlo como nombre de archivo."""
     return re.sub(r"[^a-zA-Z0-9_-]+", "_", value).strip("_") or "artifact"
 
 
-# Ejecuta la responsabilidad de normalizar nombre producto.
+# ARTEFACTO VISUAL: normaliza nombres de producto antes de pintarlos o describirlos.
 def normalizar_nombre_producto(value: str) -> str:
     """Normaliza nombres para mapearlos a descripciones visuales."""
     value = value.lower().strip()

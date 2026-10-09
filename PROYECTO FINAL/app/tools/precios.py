@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 from app.estado import EstadoCotizacion
 
 
-# Ejecuta la responsabilidad de mock comparar opciones.
+# TOOL MOCK/PRECIOS: puntua opciones disponibles para recomendar una alternativa cotizable.
 def mock_comparar_opciones(estado: EstadoCotizacion) -> dict:
     """Ordena opciones disponibles con un scoring simple de afinidad."""
     # MOCK: ESTA TOOL DEBERIA USAR REGLAS REALES DE RECOMENDACION, SCORING COMERCIAL O UN SERVICIO DE OPTIMIZACION DE PAQUETES.
@@ -36,7 +36,7 @@ def mock_comparar_opciones(estado: EstadoCotizacion) -> dict:
     return {"recommended": ranked[0] if ranked else None, "ranking": ranked}
 
 
-# Ejecuta la responsabilidad de mock generar cotizacion.
+# TOOL MOCK/COTIZACION: calcula subtotal, IGV y total de la cotizacion simulada.
 def mock_generar_cotizacion(estado: EstadoCotizacion) -> dict:
     """Genera una cotizacion mock desde el paquete o productos recomendados."""
     # MOCK: ESTA TOOL DEBERIA GENERAR LA COTIZACION EN EL SISTEMA TRANSACCIONAL REAL, PERSISTIRLA EN POSTGRESQL Y DEVOLVER ID, TOTALES E IMPUESTOS OFICIALES.
@@ -75,7 +75,7 @@ def mock_generar_cotizacion(estado: EstadoCotizacion) -> dict:
     }
 
 
-# Ejecuta logica interna para ajuste capacidad.
+# VALIDACION DE PRECIO: ajusta score segun capacidad del paquete frente a asistentes.
 def _ajuste_capacidad(option: dict, asistentes: int) -> float:
     """Calcula que tan bien calza la capacidad del paquete."""
     if option["capacity_min"] <= asistentes <= option["capacity_max"]:
@@ -85,7 +85,7 @@ def _ajuste_capacidad(option: dict, asistentes: int) -> float:
     return 0.0
 
 
-# Ejecuta logica interna para ajuste presupuesto.
+# VALIDACION DE PRECIO: ajusta score segun presupuesto declarado por el usuario.
 def _ajuste_presupuesto(option: dict, presupuesto: float | None) -> float:
     """Evalua si el precio base entra en el presupuesto declarado."""
     if not presupuesto:
@@ -93,7 +93,7 @@ def _ajuste_presupuesto(option: dict, presupuesto: float | None) -> float:
     return 1.0 if option["base_price"] <= presupuesto else max(0.0, 1 - ((option["base_price"] - presupuesto) / option["base_price"]))
 
 
-# Ejecuta logica interna para ajuste preferencia.
+# VALIDACION DE PRECIO: ajusta score segun preferencias declaradas por el usuario.
 def _ajuste_preferencia(option: dict, preferencias: list[str]) -> float:
     """Mide coincidencia simple entre preferencias y texto del paquete."""
     texto = " ".join([option["name"], *option.get("includes", [])]).lower()

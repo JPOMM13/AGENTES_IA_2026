@@ -5,7 +5,7 @@ import math
 from app.estado import EstadoCotizacion
 
 
-# Ejecuta la responsabilidad de mock dimensionar evento.
+# TOOL MOCK/DIMENSIONAMIENTO: calcula cantidades sugeridas por producto segun asistentes y evento.
 def mock_dimensionar_evento(estado: EstadoCotizacion) -> dict:
     """Calcula cantidades referenciales segun asistentes y productos elegidos."""
     # MOCK: ESTA TOOL DEBERIA USAR REGLAS COMERCIALES REALES O UN MOTOR DE DIMENSIONAMIENTO VERSIONADO EN BD PARA CALCULAR CANTIDADES.

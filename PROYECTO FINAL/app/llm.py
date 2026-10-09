@@ -4,7 +4,7 @@ import json
 from urllib import request
 from urllib.error import HTTPError, URLError
 
-from app.llm_config import ConfiguracionLLM, obtener_configuracion_llm
+from app.configuracion_llm import ConfiguracionLLM, obtener_configuracion_llm
 from app.estado import EstadoCotizacion
 
 
@@ -30,13 +30,13 @@ FORMATO DE SALIDA:
 """
 
 
-# Ejecuta la responsabilidad de debe usar llm.
+# CONFIGURACION LLM: permite activar o desactivar el pulido de respuestas con modelo.
 def debe_usar_llm() -> bool:
     """Indica si se debe usar LLM para pulir respuestas."""
     return obtener_configuracion_llm().habilitado
 
 
-# Ejecuta la responsabilidad de pulir respuesta.
+# LLM DE RESPUESTA: mejora tono conversacional sin cambiar decisiones del workflow.
 def pulir_respuesta(respuesta_base: str, estado: EstadoCotizacion) -> str:
     """Usa el LLM configurado para mejorar tono sin cambiar datos."""
     if not debe_usar_llm():
@@ -49,7 +49,7 @@ def pulir_respuesta(respuesta_base: str, estado: EstadoCotizacion) -> str:
     return polished if es_respuesta_pulida_segura(respuesta_base, polished, estado) else respuesta_base
 
 
-# Ejecuta la responsabilidad de llamar llm.
+# CLIENTE LLM: llama al proveedor configurado manteniendo una interfaz unica.
 def llamar_llm(system_prompt: str, user_prompt: str, config: ConfiguracionLLM) -> str:
     """Ejecuta cualquier proveedor configurado desde un unico metodo."""
     if config.requiere_api_key and not config.clave_api:
@@ -68,7 +68,7 @@ def llamar_llm(system_prompt: str, user_prompt: str, config: ConfiguracionLLM) -
         return ""
 
 
-# Ejecuta la responsabilidad de construir carga chat.
+# CLIENTE LLM: arma payload compatible con OpenAI, Anthropic u Ollama segun configuracion.
 def construir_payload_chat(system_prompt: str, user_prompt: str, config: ConfiguracionLLM) -> dict:
     """Construye el carga segun el proveedor definido en variables de entorno."""
     mensajes = [
@@ -100,7 +100,7 @@ def construir_payload_chat(system_prompt: str, user_prompt: str, config: Configu
     return {"model": config.model, "messages": mensajes, "temperature": config.temperatura}
 
 
-# Ejecuta la responsabilidad de construir headers.
+# CLIENTE LLM: arma headers HTTP y credenciales segun proveedor configurado.
 def construir_headers(config: ConfiguracionLLM) -> dict[str, str]:
     """Construye headers HTTP segun el proveedor configurado."""
     headers = {"Content-Type": "application/json"}
@@ -112,7 +112,7 @@ def construir_headers(config: ConfiguracionLLM) -> dict[str, str]:
     return headers
 
 
-# Ejecuta la responsabilidad de construir prompt pulido.
+# PROMPT DE RESPUESTA: da contexto al LLM para sonar amable sin inventar datos.
 def construir_prompt_pulido(respuesta_base: str, estado: EstadoCotizacion) -> str:
     """Construye el prompt que limita al LLM a reescribir sin inventar."""
     captured = estado.a_diccionario_panel()
@@ -142,7 +142,7 @@ def construir_prompt_pulido(respuesta_base: str, estado: EstadoCotizacion) -> st
     )
 
 
-# Ejecuta la responsabilidad de extraer texto respuesta.
+# CLIENTE LLM: extrae texto desde formatos de respuesta de cada proveedor.
 def extraer_texto_respuesta(data: dict, config: ConfiguracionLLM) -> str:
     """Extrae texto desde la respuesta del proveedor configurado."""
     if config.proveedor == "ollama":
@@ -164,7 +164,7 @@ def extraer_texto_respuesta(data: dict, config: ConfiguracionLLM) -> str:
     return ""
 
 
-# Ejecuta la responsabilidad de es respuesta pulida segura.
+# GUARDRAIL DE RESPUESTA LLM: descarta pulidos que agreguen datos o cambien decisiones.
 def es_respuesta_pulida_segura(respuesta_base: str, polished: str, estado: EstadoCotizacion) -> bool:
     """Valida que el texto pulido no contradiga reglas ni estado."""
     raw = respuesta_base.lower()
@@ -206,7 +206,7 @@ def es_respuesta_pulida_segura(respuesta_base: str, polished: str, estado: Estad
     return True
 
 
-# Ejecuta la responsabilidad de parece reinicio.
+# VALIDACION DE RESPUESTA LLM: evita respuestas que parezcan reiniciar la conversacion sin razon.
 def parece_reinicio(texto: str, estado: EstadoCotizacion) -> bool:
     """Detecta si el LLM intento reiniciar una conversacion ya avanzada."""
     if len(estado.mensajes) < 3:

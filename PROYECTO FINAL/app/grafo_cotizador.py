@@ -14,7 +14,7 @@ from app.guardrails.entrada import validar_mensaje_entrada
 from app.guardrails.salida import asegurar_respuesta_final
 from app.observabilidad import configurar_langsmith
 from app.estado import EstadoCotizacion
-from app.workflow import (
+from app.flujo import (
     decidir_accion_agentica_turno,
     ejecutar_decision_negocio,
     finalizar_turno_cotizador,
@@ -34,7 +34,7 @@ class EstadoGrafoCotizador(TypedDict, total=False):
     finalizado: bool
 
 
-# Ejecuta la responsabilidad de ejecutar grafo cotizador.
+# NODO LANGGRAPH / ORQUESTADOR: punto de entrada del workflow agentico; recibe el mensaje y ejecuta el grafo completo.
 def ejecutar_grafo_cotizador(mensaje_usuario: str, estado: EstadoCotizacion) -> tuple[str, EstadoCotizacion]:
     """Ejecuta el workflow agentico conversacional basado en LangGraph."""
     configurar_langsmith()
@@ -51,7 +51,7 @@ def ejecutar_grafo_cotizador(mensaje_usuario: str, estado: EstadoCotizacion) -> 
     return resultado["respuesta_final"], resultado["estado_cotizacion"]
 
 
-# Ejecuta la responsabilidad de obtener grafo cotizador.
+# NODO LANGGRAPH / DEFINICION DEL GRAFO: registra nodos, rutas y orden de ejecucion del flujo conversacional.
 @lru_cache(maxsize=1)
 def obtener_grafo_cotizador():
     """Compila y reutiliza el grafo para no reconstruirlo en cada mensaje."""
@@ -83,7 +83,7 @@ def obtener_grafo_cotizador():
     return grafo.compile()
 
 
-# Ejecuta la responsabilidad de validar entrada.
+# GUARDRAIL DE ENTRADA / NODO LANGGRAPH: bloquea mensajes inseguros antes de usar LLM, memoria o tools.
 def validar_entrada(estado_grafo: EstadoGrafoCotizador) -> EstadoGrafoCotizador:
     """Aplica guardrail simple de entrada antes de usar LLM o tools."""
     mensaje = estado_grafo["mensaje_usuario"].strip()
@@ -106,7 +106,7 @@ def validar_entrada(estado_grafo: EstadoGrafoCotizador) -> EstadoGrafoCotizador:
     return {**estado_grafo, "finalizado": False}
 
 
-# Ejecuta la responsabilidad de extraer y enrutar intencion.
+# EXTRACCION / NODO LANGGRAPH: interpreta el mensaje, actualiza memoria temporal y deja lista la intencion del turno.
 def extraer_y_enrutar_intencion(estado_grafo: EstadoGrafoCotizador) -> EstadoGrafoCotizador:
     """Usa extractor LLM/reglas para actualizar estado y dejar la intencion lista."""
     mensaje = estado_grafo["mensaje_usuario"]
@@ -118,7 +118,7 @@ def extraer_y_enrutar_intencion(estado_grafo: EstadoGrafoCotizador) -> EstadoGra
     return {**estado_grafo, "estado_cotizacion": estado}
 
 
-# Ejecuta la responsabilidad de gestionar memoria persistente.
+# MEMORIA MOCK / NODO LANGGRAPH: consulta o retoma una cotizacion previa cuando el usuario lo solicita.
 def gestionar_memoria_persistente(estado_grafo: EstadoGrafoCotizador) -> EstadoGrafoCotizador:
     """Consulta memoria mock si hay contacto o si existe una eleccion pendiente."""
     mensaje = estado_grafo["mensaje_usuario"]
@@ -140,7 +140,7 @@ def gestionar_memoria_persistente(estado_grafo: EstadoGrafoCotizador) -> EstadoG
     }
 
 
-# Ejecuta la responsabilidad de decidir accion agentica.
+# AGENTE DECISOR / NODO LANGGRAPH: permite que create_agent elija la siguiente accion de alto nivel.
 def decidir_accion_agentica(estado_grafo: EstadoGrafoCotizador) -> EstadoGrafoCotizador:
     """Permite que create_agent decida la siguiente accion de alto nivel."""
     mensaje = estado_grafo["mensaje_usuario"]
@@ -149,7 +149,7 @@ def decidir_accion_agentica(estado_grafo: EstadoGrafoCotizador) -> EstadoGrafoCo
     return {**estado_grafo, "estado_cotizacion": estado}
 
 
-# Ejecuta la responsabilidad de ejecutar tools mock negocio.
+# TOOLS MOCK DE NEGOCIO / NODO LANGGRAPH: ejecuta catalogo, cobertura, stock, precios y cotizacion simulada.
 def ejecutar_tools_mock_negocio(estado_grafo: EstadoGrafoCotizador) -> EstadoGrafoCotizador:
     """Ejecuta reglas de negocio y tools mock: catalogo, stock, cobertura y cotizacion."""
     mensaje = estado_grafo["mensaje_usuario"]
@@ -164,7 +164,7 @@ def ejecutar_tools_mock_negocio(estado_grafo: EstadoGrafoCotizador) -> EstadoGra
     }
 
 
-# Ejecuta la responsabilidad de evaluar salida guardrail.
+# GUARDRAIL DE SALIDA / NODO LANGGRAPH: valida la respuesta final antes de persistirla y mostrarla al usuario.
 def evaluar_salida_guardrail(estado_grafo: EstadoGrafoCotizador) -> EstadoGrafoCotizador:
     """Aplica evaluacion final antes de persistir y mostrar la respuesta."""
     estado = estado_grafo["estado_cotizacion"]
@@ -187,7 +187,7 @@ def evaluar_salida_guardrail(estado_grafo: EstadoGrafoCotizador) -> EstadoGrafoC
     }
 
 
-# Ejecuta la responsabilidad de ruta si finalizado.
+# ROUTER LANGGRAPH: decide si el grafo continua al siguiente nodo o salta a la salida final.
 def ruta_si_finalizado(estado_grafo: EstadoGrafoCotizador) -> str:
     """Decide si el grafo continua o pasa directo a salida."""
     return "finalizar" if estado_grafo.get("finalizado") else "continuar"

@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from app.data.mock_data import MOCK_KNOWLEDGE
+from app.data.datos_mock import MOCK_KNOWLEDGE
 
 
-# Ejecuta la responsabilidad de mock buscar rag.
+# TOOL MOCK/RAG: busca politicas o contexto de negocio en una base de conocimiento simulada.
 def mock_buscar_rag(query: str) -> dict:
     """Busca respuestas de politicas en la base de conocimiento mock."""
     # MOCK: ESTA TOOL DEBERIA CONSULTAR EL RAG REAL CON DOCUMENTOS EN STORAGE, EMBEDDINGS EN PGVECTOR/POSTGRESQL Y RETRIEVER SEMANTICO.

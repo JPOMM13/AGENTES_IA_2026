@@ -15,7 +15,7 @@ from app.estado import EstadoCotizacion
 # MIDDLEWARE NATIVO DE LANGCHAIN PARA CREATE_AGENT.
 
 
-# Ejecuta la responsabilidad de obtener middleware langchain guardrails.
+# GUARDRAIL MIDDLEWARE CREATE_AGENT: configura PIIMiddleware nativo para entradas del agente.
 def obtener_middleware_langchain_guardrails() -> list:
     """Devuelve middlewares nativos para pasarlos directamente a create_agent."""
     return [
@@ -41,7 +41,7 @@ def obtener_middleware_langchain_guardrails() -> list:
     ]
 
 
-# Ejecuta la responsabilidad de invocar agente con guardrails.
+# GUARDRAIL MIDDLEWARE CREATE_AGENT: valida entrada, invoca el agente y valida salida estructurada.
 def invocar_agente_con_guardrails(
     agente: Any,
     carga_agente: dict[str, Any],

@@ -2,11 +2,11 @@ from __future__ import annotations
 
 from datetime import date, datetime, timedelta
 
-from app.data.mock_data import AVAILABILITY, DEFAULT_PRODUCT_STOCK, PRODUCT_CATEGORIES
+from app.data.datos_mock import AVAILABILITY, DEFAULT_PRODUCT_STOCK, PRODUCT_CATEGORIES
 from app.estado import EstadoCotizacion
 
 
-# Ejecuta la responsabilidad de mock validar disponibilidad.
+# TOOL MOCK/DISPONIBILIDAD: valida cupos de paquetes/servicios para la fecha solicitada.
 def mock_validar_disponibilidad(estado: EstadoCotizacion, options: list[dict]) -> dict:
     """Valida disponibilidad mock de paquetes para la fecha solicitada."""
     # MOCK: ESTA TOOL DEBERIA CONSULTAR DISPONIBILIDAD REAL EN EL SISTEMA DE RESERVAS/CALENDARIO O EN UNA TABLA TRANSACCIONAL DE CUPOS POR FECHA.
@@ -36,7 +36,7 @@ def mock_validar_disponibilidad(estado: EstadoCotizacion, options: list[dict]) -
     return {"available_options": available_options, "opciones_descartadas": opciones_descartadas}
 
 
-# Ejecuta la responsabilidad de mock validar stock productos.
+# TOOL MOCK/STOCK: valida inventario por producto y propone alternativas por categoria.
 def mock_validar_stock_productos(estado: EstadoCotizacion, requested_items: list[dict], products: list[dict]) -> dict:
     """Valida stock mock por producto y calcula faltantes con alternativas."""
     # MOCK: ESTA TOOL DEBERIA CONSULTAR STOCK REAL EN INVENTARIO, ERP O TABLAS TRANSACCIONALES DE DISPONIBILIDAD POR PRODUCTO Y FECHA.
@@ -70,7 +70,7 @@ def mock_validar_stock_productos(estado: EstadoCotizacion, requested_items: list
     return {"available_items": available_items, "missing_items": missing_items}
 
 
-# Ejecuta la responsabilidad de buscar alternativas producto disponibles.
+# TOOL MOCK/STOCK: busca productos sustitutos disponibles cuando falta stock del pedido exacto.
 def buscar_alternativas_producto_disponibles(item: dict, products: list[dict], day_availability: dict) -> list[dict]:
     """Busca alternativas de la misma familia con stock disponible."""
     alternatives = []
@@ -93,7 +93,7 @@ def buscar_alternativas_producto_disponibles(item: dict, products: list[dict], d
     return alternatives
 
 
-# Ejecuta la responsabilidad de categorias alternativas para.
+# TOOL MOCK/CATALOGO: define categorias cercanas para sugerir alternativas sin inventar productos.
 def categorias_alternativas_para(category: str) -> list[str]:
     """Devuelve categorias alternativas configuradas para un producto."""
     for config in PRODUCT_CATEGORIES.values():

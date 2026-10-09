@@ -15,7 +15,7 @@ class ResultadoGuardrailSalida:
     respuesta_segura: str = ""
 
 
-# Ejecuta la responsabilidad de validar salida agente.
+# GUARDRAIL DE SALIDA AGENTICA: valida que el resultado del agente tenga mensajes utilizables.
 def validar_salida_agente(resultado: Any, nombre_agente: str) -> ResultadoGuardrailSalida:
     """Valida que create_agent devuelva una estructura minima consumible."""
     if not isinstance(resultado, dict):
@@ -26,7 +26,7 @@ def validar_salida_agente(resultado: Any, nombre_agente: str) -> ResultadoGuardr
     return ResultadoGuardrailSalida(True, f"{nombre_agente}: salida valida")
 
 
-# Ejecuta la responsabilidad de asegurar respuesta final.
+# GUARDRAIL DE SALIDA FINAL: evita respuestas inconsistentes como derivaciones no solicitadas.
 def asegurar_respuesta_final(respuesta: str, estado: EstadoCotizacion) -> str:
     """Evita respuestas vacias y refuerza reglas criticas antes de responder."""
     if not respuesta.strip():

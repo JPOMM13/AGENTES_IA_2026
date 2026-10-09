@@ -21,7 +21,7 @@ class ConfiguracionLLM:
     max_tokens_salida: int = 350
     segundos_timeout: int = 30
 
-    # Ejecuta la responsabilidad de modelo langchain.
+    # CONFIGURACION LLM: adapta el modelo al formato que espera LangChain create_agent.
     @property
     def modelo_langchain(self) -> str:
         """Devuelve el identificador de modelo esperado por LangChain."""
@@ -33,7 +33,7 @@ class ConfiguracionLLM:
             return f"anthropic:{self.model}"
         return self.model
 
-    # Ejecuta la responsabilidad de url chat.
+    # CONFIGURACION LLM: resuelve el endpoint de chat segun proveedor configurado.
     @property
     def url_chat(self) -> str:
         """Devuelve el endpoint HTTP de chat/texto para el proveedor activo."""
@@ -47,7 +47,7 @@ class ConfiguracionLLM:
             return self.host
         raise ValueError(f"Proveedor LLM no soportado: {self.proveedor}")
 
-    # Ejecuta la responsabilidad de requiere api key.
+    # CONFIGURACION LLM: indica si el proveedor necesita clave externa o es local.
     @property
     def requiere_api_key(self) -> bool:
         """Indica si el proveedor configurado requiere API key."""
@@ -65,7 +65,7 @@ class ConfiguracionGeneracionImagen:
     quality: str = "high"
     segundos_timeout: int = 60
 
-    # Ejecuta la responsabilidad de url imagen.
+    # CONFIGURACION MULTIMODAL: resuelve el endpoint de imagen segun proveedor configurado.
     @property
     def url_imagen(self) -> str:
         """Devuelve el endpoint HTTP de generacion de imagenes."""
@@ -73,14 +73,14 @@ class ConfiguracionGeneracionImagen:
             return "https://api.openai.com/v1/images/generations"
         raise ValueError(f"Proveedor de imagen no soportado: {self.proveedor}")
 
-    # Ejecuta la responsabilidad de listo.
+    # CONFIGURACION MULTIMODAL: valida que existan proveedor, modelo y credenciales necesarias.
     @property
     def listo(self) -> bool:
         """Indica si existe configuracion suficiente para llamar al modelo de imagen."""
         return self.habilitado and self.proveedor == "openai" and bool(self.clave_api)
 
 
-# Ejecuta la responsabilidad de obtener configuracion llm.
+# CONFIGURACION LLM: centraliza proveedor, modelo y parametros para cambiar entre Ollama/OpenAI/Anthropic.
 def obtener_configuracion_llm() -> ConfiguracionLLM:
     """Lee variables de entorno y arma una configuracion unica de LLM."""
     cargar_archivo_env()
@@ -97,7 +97,7 @@ def obtener_configuracion_llm() -> ConfiguracionLLM:
     )
 
 
-# Ejecuta la responsabilidad de obtener configuracion generacion imagen.
+# CONFIGURACION MULTIMODAL: centraliza proveedor y modelo para imagenes del evento.
 def obtener_configuracion_generacion_imagen() -> ConfiguracionGeneracionImagen:
     """Lee variables de entorno para generar imagenes con un proveedor multimodal."""
     cargar_archivo_env()
@@ -113,7 +113,7 @@ def obtener_configuracion_generacion_imagen() -> ConfiguracionGeneracionImagen:
     )
 
 
-# Ejecuta la responsabilidad de modelo por defecto para.
+# CONFIGURACION LLM: define modelo por defecto segun proveedor cuando no viene en .env.
 def modelo_por_defecto_para(proveedor: str) -> str:
     """Define el modelo por defecto para cada proveedor soportado."""
     defaults = {
@@ -124,7 +124,7 @@ def modelo_por_defecto_para(proveedor: str) -> str:
     return defaults.get(proveedor, "llama3.2:latest")
 
 
-# Ejecuta la responsabilidad de modelo imagen por defecto para.
+# CONFIGURACION MULTIMODAL: define modelo de imagen por defecto segun proveedor.
 def modelo_imagen_por_defecto_para(proveedor: str) -> str:
     """Define el modelo de imagen por defecto para cada proveedor soportado."""
     defaults = {
@@ -133,7 +133,7 @@ def modelo_imagen_por_defecto_para(proveedor: str) -> str:
     return defaults.get(proveedor, "gpt-image-1")
 
 
-# Ejecuta la responsabilidad de host por defecto para.
+# CONFIGURACION LLM: define endpoint local o remoto segun proveedor.
 def host_por_defecto_para(proveedor: str) -> str | None:
     """Define host por defecto cuando el proveedor requiere endpoint local."""
     if proveedor == "ollama":
@@ -141,7 +141,7 @@ def host_por_defecto_para(proveedor: str) -> str | None:
     return None
 
 
-# Ejecuta la responsabilidad de api key para.
+# CONFIGURACION LLM: lee la API key solo para proveedores que la requieren.
 def api_key_para(proveedor: str) -> str | None:
     """Busca la API key esperada por proveedor en variables de entorno."""
     env_by_provider = {
@@ -152,7 +152,7 @@ def api_key_para(proveedor: str) -> str | None:
     return os.getenv(env_name) if env_name else None
 
 
-# Ejecuta la responsabilidad de cargar archivo env.
+# CONFIGURACION LLM: carga variables del archivo .env sin depender de valores hardcodeados.
 def cargar_archivo_env(path: Path = ENV_PATH) -> None:
     """Carga variables desde .env y relee cambios hechos con la app viva."""
     global _ENV_LOADED, _ENV_MTIME

@@ -5,13 +5,13 @@ import re
 from functools import lru_cache
 from typing import Any
 
-from app.agentic_decider import debe_usar_create_agent
-from app.guardrails.middleware import invocar_agente_con_guardrails, obtener_middleware_langchain_guardrails
-from app.llm_config import obtener_configuracion_llm
+from app.decisor_agentico import debe_usar_create_agent
+from app.guardrails.capa_intermedia import invocar_agente_con_guardrails, obtener_middleware_langchain_guardrails
+from app.configuracion_llm import obtener_configuracion_llm
 from app.estado import EstadoCotizacion
 
 
-# Ejecuta la responsabilidad de extraer campos con create agente.
+# AGENTE EXTRACTOR CREATE_AGENT: interpreta lenguaje natural y devuelve campos estructurados para el workflow.
 def extraer_campos_con_create_agent(mensaje_usuario: str, estado: EstadoCotizacion) -> dict[str, Any]:
     """Usa create_agent para extraer datos explicitos del usuario.
 
@@ -46,20 +46,20 @@ def extraer_campos_con_create_agent(mensaje_usuario: str, estado: EstadoCotizaci
         return {}
 
 
-# Ejecuta la responsabilidad de obtener agente extractor.
+# CACHE AGENTICO: reutiliza el agente extractor para no recrearlo en cada mensaje.
 @lru_cache(maxsize=1)
 def obtener_agente_extractor():
     """Devuelve el agente extractor cacheado para reutilizarlo por turno."""
     return crear_agente_extractor()
 
 
-# Ejecuta la responsabilidad de crear agente extractor.
+# AGENTE EXTRACTOR CREATE_AGENT: define system prompt y tool de extraccion controlada para datos de cotizacion.
 def crear_agente_extractor():
     """Crea el agente extractor con create_agent usando el LLM configurado."""
     from langchain.agents import create_agent
     from langchain.tools import tool
 
-    # Ejecuta la responsabilidad de registrar campos extraidos.
+    # TOOL DEL AGENTE EXTRACTOR: registra campos estructurados para que el workflow los valide despues.
     @tool
     def registrar_campos_extraidos(
         tipo_evento: str = "",
@@ -157,7 +157,7 @@ FORMATO DE SALIDA:
     return agente
 
 
-# Ejecuta la responsabilidad de extraer carga tool.
+# VALIDACION DE SALIDA AGENTICA: recupera el payload estructurado devuelto por la tool del extractor.
 def extraer_payload_tool(mensajes: list) -> dict[str, Any]:
     """Recupera el JSON emitido por la tool del agente extractor."""
     for message in reversed(mensajes):
@@ -173,7 +173,7 @@ def extraer_payload_tool(mensajes: list) -> dict[str, Any]:
     return {}
 
 
-# Ejecuta la responsabilidad de normalizar campos extraidos.
+# VALIDACION ANTI-ALUCINACION: limpia campos del LLM y conserva solo datos con evidencia en el mensaje.
 def normalizar_campos_extraidos(carga: dict[str, Any], mensaje_usuario: str) -> dict[str, Any]:
     """Normaliza y acepta solo campos con evidencia en el mensaje."""
     fields: dict[str, Any] = {}
@@ -235,27 +235,27 @@ def normalizar_campos_extraidos(carga: dict[str, Any], mensaje_usuario: str) -> 
     return fields
 
 
-# Ejecuta la responsabilidad de limpiar texto.
+# VALIDACION DE TEXTO: normaliza cadenas capturadas antes de pasarlas al estado.
 def limpiar_texto(value: Any) -> str:
     """Limpia valores vacios o placeholders enviados por el LLM."""
     texto = str(value or "").strip(" .,:;`\"'")
     return "" if texto.lower() in {"null", "none", "n/a", "na", "no aplica", "vacio", "vacío"} else texto
 
 
-# Ejecuta la responsabilidad de parsear entero.
+# VALIDACION NUMERICA: convierte valores del LLM a enteros seguros o descarta entradas invalidas.
 def parsear_entero(value: Any) -> int | None:
     """Convierte texto numerico a entero de forma segura."""
     texto = limpiar_texto(value)
     return int(texto) if texto.isdigit() else None
 
 
-# Ejecuta la responsabilidad de normalizar nombre.
+# VALIDACION DE IDENTIDAD: normaliza el nombre del cotizante sin inventar datos.
 def normalizar_nombre(value: str) -> str:
     """Capitaliza nombres extraidos para guardarlos consistentemente."""
     return " ".join(part.capitalize() for part in value.split())
 
 
-# Ejecuta la responsabilidad de contiene senal fecha.
+# VALIDACION DE FECHA: verifica que el mensaje tenga evidencia textual de fecha antes de aceptar una fecha extraida.
 def contiene_senal_fecha(mensaje_usuario: str) -> bool:
     """Confirma que el mensaje contiene una senal real de fecha."""
     texto = mensaje_usuario.lower()
@@ -277,7 +277,7 @@ def contiene_senal_fecha(mensaje_usuario: str) -> bool:
     return any(mes in texto for mes in months) or bool(re.search(r"\b\d{1,2}[-/]\d{1,2}\b", texto))
 
 
-# Ejecuta la responsabilidad de preferencia soportada y presente.
+# VALIDACION DE PREFERENCIAS: acepta solo preferencias soportadas y mencionadas por el usuario.
 def preferencia_soportada_y_presente(preference: str, mensaje_usuario: str) -> bool:
     """Valida que la preferencia exista literalmente en el mensaje."""
     texto = mensaje_usuario.lower()
@@ -290,7 +290,7 @@ def preferencia_soportada_y_presente(preference: str, mensaje_usuario: str) -> b
     return any(alias in texto for alias in aliases.get(preference, []))
 
 
-# Ejecuta la responsabilidad de normalizar producto solicitado.
+# VALIDACION DE PRODUCTO: normaliza productos solicitados para compararlos contra el catalogo mock.
 def normalizar_producto_solicitado(value: str) -> str:
     """Mapea alias de productos a categorias canonicas."""
     mapping = {
@@ -308,7 +308,7 @@ def normalizar_producto_solicitado(value: str) -> str:
     return mapping.get(value, value)
 
 
-# Ejecuta la responsabilidad de normalizar cambios productos.
+# VALIDACION DE CAMBIOS: estructura altas, bajas y reemplazos de productos pedidos por el usuario.
 def normalizar_cambios_productos(carga: dict[str, Any], mensaje_usuario: str) -> dict[str, list[str]]:
     """Convierte campos CSV del agente en cambios de productos."""
     mapping = {
@@ -334,7 +334,7 @@ def normalizar_cambios_productos(carga: dict[str, Any], mensaje_usuario: str) ->
     return changes
 
 
-# Ejecuta la responsabilidad de producto solicitado soportado y presente.
+# VALIDACION DE CATALOGO: acepta productos solo si existen en el vocabulario soportado y estan en el mensaje.
 def producto_solicitado_soportado_y_presente(product: str, mensaje_usuario: str) -> bool:
     """Verifica que el producto soportado fue mencionado por el usuario."""
     texto = mensaje_usuario.lower()
@@ -351,7 +351,7 @@ def producto_solicitado_soportado_y_presente(product: str, mensaje_usuario: str)
     return any(alias in texto for alias in aliases.get(product, []))
 
 
-# Ejecuta la responsabilidad de producto solicitado soportado o contextual.
+# VALIDACION CONTEXTUAL DE CATALOGO: permite cambios de producto solo con evidencia directa o contexto de reemplazo.
 def producto_solicitado_soportado_o_contextual(product: str, mensaje_usuario: str, change_key: str) -> bool:
     """Permite reemplazos contextuales cuando el origen viene del estado."""
     if producto_solicitado_soportado_y_presente(product, mensaje_usuario):
@@ -359,7 +359,7 @@ def producto_solicitado_soportado_o_contextual(product: str, mensaje_usuario: st
     return change_key == "replace_from"
 
 
-# Ejecuta la responsabilidad de tipo evento soportado y presente.
+# VALIDACION DE EVENTO: acepta tipos de evento soportados solo si el usuario los menciono.
 def tipo_evento_soportado_y_presente(tipo_evento: str, mensaje_usuario: str) -> bool:
     """Verifica que el tipo de evento soportado tenga evidencia textual."""
     texto = mensaje_usuario.lower()
@@ -375,7 +375,7 @@ def tipo_evento_soportado_y_presente(tipo_evento: str, mensaje_usuario: str) -> 
     return any(alias in texto for alias in aliases.get(tipo_evento, []))
 
 
-# Ejecuta la responsabilidad de campo tiene evidencia textual.
+# VALIDACION ANTI-ALUCINACION: confirma que cada campo extraido tenga respaldo textual en el mensaje.
 def campo_tiene_evidencia_textual(key: str, value: str, mensaje_usuario: str) -> bool:
     """Evita aceptar campos del LLM que no aparezcan en el mensaje."""
     texto = mensaje_usuario.lower()

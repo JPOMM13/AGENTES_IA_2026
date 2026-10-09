@@ -25,6 +25,7 @@ class EstadoCotizacion:
     nombre_cliente: str | None = None
     contacto: str | None = None
 
+    errores_validacion_campos: list[str] = field(default_factory=list)
     campos_faltantes: list[str] = field(default_factory=list)
     opciones_catalogo: list[dict[str, Any]] = field(default_factory=list)
     opciones_validas: list[dict[str, Any]] = field(default_factory=list)
@@ -48,12 +49,12 @@ class EstadoCotizacion:
     mensajes: list[dict[str, str]] = field(default_factory=list)
     trazas: list[dict[str, Any]] = field(default_factory=list)
 
-    # Ejecuta la responsabilidad de registrar log.
+    # OBSERVABILIDAD DEL ESTADO: agrega trazas del flujo para depurar decisiones, tools y guardrails.
     def registrar_log(self, evento: str, carga: dict[str, Any] | None = None) -> None:
         """Registra una traza interna del flujo para debugging y evals."""
         self.trazas.append({"evento": evento, "carga": carga or {}})
 
-    # Ejecuta la responsabilidad de a diccionario panel.
+    # UI/DEBUG: serializa el estado para mostrarlo en el panel lateral de Streamlit.
     def a_diccionario_panel(self) -> dict[str, Any]:
         """Devuelve una vista compacta del estado para mostrar en el panel lateral."""
         return {
@@ -71,6 +72,7 @@ class EstadoCotizacion:
             "nombre_cliente": self.nombre_cliente,
             "contacto": self.contacto,
             "preferencias": self.preferencias,
+            "errores_validacion_campos": self.errores_validacion_campos,
             "campos_faltantes": self.campos_faltantes,
             "cobertura_ok": self.cobertura_ok,
             "disponibilidad_ok": self.disponibilidad_ok,
@@ -82,7 +84,7 @@ class EstadoCotizacion:
             "imagen_artefacto_cotizacion": self.imagen_artefacto_cotizacion,
         }
 
-    # Ejecuta la responsabilidad de a diccionario persistido.
+    # MEMORIA MOCK: serializa el estado para guardarlo en JSON local o persistencia futura.
     def a_diccionario_persistido(self) -> dict[str, Any]:
         """Serializa el estado para guardarlo en la memoria mock entre sesiones."""
         data = asdict(self)
@@ -90,7 +92,7 @@ class EstadoCotizacion:
         data["trazas"] = data["trazas"][-50:]
         return data
 
-    # Ejecuta la responsabilidad de desde diccionario persistido.
+    # MEMORIA MOCK: reconstruye el estado desde JSON persistido manteniendo compatibilidad.
     @classmethod
     def desde_diccionario_persistido(cls, data: dict[str, Any]) -> "EstadoCotizacion":
         """Reconstruye un EstadoCotizacion desde datos guardados previamente."""
@@ -100,7 +102,7 @@ class EstadoCotizacion:
         return cls(**filtered)
 
 
-# Ejecuta la responsabilidad de normalizar diccionario estado.
+# COMPATIBILIDAD DE MEMORIA: traduce llaves antiguas del estado a nombres actuales en espanol.
 def normalizar_diccionario_estado(data: dict[str, Any]) -> dict[str, Any]:
     """Permite leer memorias antiguas guardadas con nombres previos."""
     equivalencias = {
@@ -119,6 +121,7 @@ def normalizar_diccionario_estado(data: dict[str, Any]) -> dict[str, Any]:
         "preferences": "preferencias",
         "customer_name": "nombre_cliente",
         "contact": "contacto",
+        "field_validation_errors": "errores_validacion_campos",
         "missing_fields": "campos_faltantes",
         "catalog_options": "opciones_catalogo",
         "valid_options": "opciones_validas",

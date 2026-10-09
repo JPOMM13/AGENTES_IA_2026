@@ -10,9 +10,9 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from app.estado import EstadoCotizacion
-from app.repositories import RepositorioSesionActiva
-from app.ui.components import renderizar_tarjeta_imagen, renderizar_tarjeta_cotizacion, renderizar_panel_estado
-from app.workflow import manejar_mensaje
+from app.repositorios import RepositorioSesionActiva
+from app.ui.componentes import renderizar_tarjeta_imagen, renderizar_tarjeta_cotizacion, renderizar_panel_estado
+from app.flujo import manejar_mensaje
 
 
 st.set_page_config(page_title="Workflow agentico de eventos", page_icon="WF", layout="wide")

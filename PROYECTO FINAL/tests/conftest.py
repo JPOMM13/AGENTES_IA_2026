@@ -1,5 +1,5 @@
-import app.redis_session_store as redis_session_store
-import app.session_store as session_store
+import app.almacen_sesion_redis as redis_session_store
+import app.almacen_sesion as session_store
 import pytest
 
 

@@ -3,20 +3,20 @@ from __future__ import annotations
 from datetime import date
 
 from app.estado import EstadoCotizacion
-from app.data.mock_data import CATALOG, PRODUCTS
-from app.agentic_decider import decidir_siguiente_accion_con_agente, obtener_disponibilidad_tools, es_solicitud_derivacion_explicita
-from app.artifacts import generar_artefacto_visual_cotizacion
+from app.data.datos_mock import CATALOG, PRODUCTS
+from app.decisor_agentico import decidir_siguiente_accion_con_agente, obtener_disponibilidad_tools, es_solicitud_derivacion_explicita
+from app.artefactos import generar_artefacto_visual_cotizacion
 from app.guardrails.decision import validar_decision_agentica
 from app.llm import pulir_respuesta
-from app.repositories import RepositorioSesionActiva, RepositorioMemoriaCotizacion
-from app.tools.availability import mock_validar_disponibilidad, mock_validar_stock_productos
-from app.tools.catalog import mock_buscar_catalogo
-from app.tools.coverage import mock_validar_cobertura
-from app.tools.dimensioning import mock_dimensionar_evento
-from app.tools.extraction import extraer_intencion_y_campos
-from app.tools.handoff import mock_derivar_whatsapp
-from app.tools.pricing import mock_comparar_opciones, mock_generar_cotizacion
-from app.tools.rag import mock_buscar_rag
+from app.repositorios import RepositorioSesionActiva, RepositorioMemoriaCotizacion
+from app.tools.disponibilidad import mock_validar_disponibilidad, mock_validar_stock_productos
+from app.tools.catalogo import mock_buscar_catalogo
+from app.tools.cobertura import mock_validar_cobertura
+from app.tools.dimensionamiento import mock_dimensionar_evento
+from app.tools.extraccion import extraer_intencion_y_campos
+from app.tools.derivacion import mock_derivar_whatsapp
+from app.tools.precios import mock_comparar_opciones, mock_generar_cotizacion
+from app.tools.consulta_rag import mock_buscar_rag
 
 
 REQUIRED_FIELDS = ["tipo_evento", "asistentes", "fecha_evento", "distrito", "nombre_cliente", "contacto", "productos_solicitados"]
@@ -24,7 +24,7 @@ ACTIVE_SESSIONS = RepositorioSesionActiva()
 QUOTE_MEMORY = RepositorioMemoriaCotizacion()
 
 
-# Ejecuta la responsabilidad de manejar mensaje.
+# WORKFLOW PRINCIPAL: recibe el mensaje del usuario y coordina extraccion, decision, negocio y respuesta.
 def manejar_mensaje(mensaje_usuario: str, estado: EstadoCotizacion) -> tuple[str, EstadoCotizacion]:
     """Orquesta el turno usando el grafo LangGraph del cotizador."""
     from app.grafo_cotizador import ejecutar_grafo_cotizador
@@ -32,7 +32,7 @@ def manejar_mensaje(mensaje_usuario: str, estado: EstadoCotizacion) -> tuple[str
     return ejecutar_grafo_cotizador(mensaje_usuario, estado)
 
 
-# Ejecuta la responsabilidad de preparar turno usuario.
+# WORKFLOW/EXTRACCION: agrega el mensaje al historial y fusiona campos extraidos en memoria temporal.
 def preparar_turno_usuario(mensaje_usuario: str, estado: EstadoCotizacion) -> EstadoCotizacion:
     """Registra el mensaje, extrae intencion/campos y actualiza memoria operativa."""
     estado.mensajes.append({"role": "user", "content": mensaje_usuario})
@@ -44,7 +44,7 @@ def preparar_turno_usuario(mensaje_usuario: str, estado: EstadoCotizacion) -> Es
     return estado
 
 
-# Ejecuta la responsabilidad de resolver memoria antes del negocio.
+# MEMORIA MOCK: resuelve recuperacion de cotizacion previa o elecciones pendientes antes de ejecutar negocio.
 def resolver_memoria_y_elecciones_previas(mensaje_usuario: str, estado: EstadoCotizacion) -> tuple[str, EstadoCotizacion, str] | None:
     """Resuelve recuperacion de memoria o eleccion pendiente antes de llamar tools."""
     pending_response = manejar_eleccion_previa_pendiente(mensaje_usuario, estado)
@@ -58,7 +58,7 @@ def resolver_memoria_y_elecciones_previas(mensaje_usuario: str, estado: EstadoCo
     return None
 
 
-# Ejecuta la responsabilidad de decidir accion agentica turno.
+# AGENTE DECISOR: pide al LLM una accion y luego la pasa por guardrails de decision.
 def decidir_accion_agentica_turno(mensaje_usuario: str, estado: EstadoCotizacion) -> EstadoCotizacion:
     """Usa create_agent para decidir accion de alto nivel cuando corresponde."""
     agent_action = decidir_siguiente_accion_con_agente(mensaje_usuario, estado)
@@ -70,9 +70,13 @@ def decidir_accion_agentica_turno(mensaje_usuario: str, estado: EstadoCotizacion
     return estado
 
 
-# Ejecuta la responsabilidad de ejecutar decision negocio.
+# WORKFLOW DE NEGOCIO: ejecuta la rama correspondiente segun la intencion validada del turno.
 def ejecutar_decision_negocio(mensaje_usuario: str, estado: EstadoCotizacion) -> tuple[str, EstadoCotizacion, str]:
     """Ejecuta las tools mock y reglas de negocio segun el estado/intencion."""
+    if estado.errores_validacion_campos:
+        respuesta = renderizar_respuesta_validacion_campos(estado)
+        return respuesta, estado, "validacion_campos"
+
     if estado.intencion == "image_request":
         respuesta = renderizar_respuesta_solicitud_imagen(estado)
         return respuesta, estado, "imagen"
@@ -130,6 +134,14 @@ def ejecutar_decision_negocio(mensaje_usuario: str, estado: EstadoCotizacion) ->
         return respuesta, estado, "derivacion"
 
     estado.registrar_log("encontrar_campos_faltantes", {"campos_faltantes": estado.campos_faltantes})
+    if estado.distrito and "distrito" not in estado.campos_faltantes and estado.cobertura_ok is not True:
+        coverage = mock_validar_cobertura(estado)
+        estado.cobertura_ok = coverage["ok"]
+        estado.registrar_log("mock_validar_cobertura_temprana", coverage)
+        if not coverage["ok"]:
+            respuesta = renderizar_respuesta_sin_cobertura(estado, coverage)
+            return respuesta, estado, "sin_cobertura"
+
     if estado.campos_faltantes:
         respuesta = pedir_campos_faltantes_para_estado(estado)
         return respuesta, estado, "recoleccion"
@@ -142,11 +154,7 @@ def ejecutar_decision_negocio(mensaje_usuario: str, estado: EstadoCotizacion) ->
     estado.cobertura_ok = coverage["ok"]
     estado.registrar_log("mock_validar_cobertura", coverage)
     if not coverage["ok"]:
-        estado.derivacion_ofrecida = True
-        respuesta = (
-            f"No tengo cobertura mock confirmada para {estado.distrito}. "
-            "No voy a cotizar sin cobertura validada. Si deseas, puedo derivarte con un asesor por WhatsApp."
-        )
+        respuesta = renderizar_respuesta_sin_cobertura(estado, coverage)
         return respuesta, estado, "sin_cobertura"
 
     catalog_result = mock_buscar_catalogo(estado)
@@ -194,18 +202,20 @@ def ejecutar_decision_negocio(mensaje_usuario: str, estado: EstadoCotizacion) ->
     return respuesta, estado, "recomendacion"
 
 
-# Ejecuta la responsabilidad de finalizar turno cotizador.
+# PERSISTENCIA/SALIDA: guarda memoria mock y pule la respuesta antes de devolverla a Streamlit.
 def finalizar_turno_cotizador(respuesta: str, estado: EstadoCotizacion, etapa: str) -> tuple[str, EstadoCotizacion]:
     """Aplica pulido, memoria visible y persistencia despues del grafo."""
     return _finalizar(respuesta, estado, etapa)
 
 
-# Ejecuta la responsabilidad de fusionar extraccion en estado.
+# MEMORIA TEMPORAL: actualiza el estado de cotizacion solo con campos extraidos y validados.
 def fusionar_extraccion_en_estado(estado: EstadoCotizacion, extraction: dict) -> None:
     """Actualiza el estado conversacional con los campos extraidos."""
     estado.intencion = extraction["intencion"]
     estado.cambio_producto_limpio_no_soportados = False
+    estado.errores_validacion_campos = []
     fields = extraction.get("fields", {})
+    estado.errores_validacion_campos = list(fields.get("errores_validacion_campos", []))
     if estado.intencion == "new_quote":
         limpiar_estado_para_nueva_cotizacion(estado)
         estado.intencion = "recommendation"
@@ -215,6 +225,9 @@ def fusionar_extraccion_en_estado(estado: EstadoCotizacion, extraction: dict) ->
     for key in ["tipo_evento", "asistentes", "fecha_evento", "distrito", "presupuesto", "nombre_cliente", "contacto"]:
         value = fields.get(key)
         if value is not None:
+            if key == "fecha_evento" and not fecha_evento_es_valida(value):
+                estado.errores_validacion_campos.append(f"La fecha indicada no es valida: {value}.")
+                continue
             setattr(estado, key, value)
             if key == "fecha_evento":
                 estado.fecha_parcial = {"dia": None, "mes": None, "anio": None}
@@ -249,7 +262,7 @@ def fusionar_extraccion_en_estado(estado: EstadoCotizacion, extraction: dict) ->
         estado.dimensionamiento = None
 
 
-# Ejecuta la responsabilidad de limpiar estado para nueva cotizacion.
+# MEMORIA TEMPORAL: reinicia datos de cotizacion cuando el usuario pide una nueva solicitud.
 def limpiar_estado_para_nueva_cotizacion(estado: EstadoCotizacion) -> None:
     """Limpia datos de negocio para iniciar otra cotizacion en la misma sesion."""
     estado.registrar_log("limpiar_estado_para_nueva_cotizacion", {"previous_contact": estado.contacto})
@@ -283,9 +296,10 @@ def limpiar_estado_para_nueva_cotizacion(estado: EstadoCotizacion) -> None:
     estado.imagen_artefacto_cotizacion = None
     estado.cambio_producto_limpio_no_soportados = False
     estado.estado_previo_pendiente = None
+    estado.errores_validacion_campos = []
 
 
-# Ejecuta la responsabilidad de detectar conversacion previa por contacto.
+# MEMORIA MOCK: busca una cotizacion previa usando el contacto como identificador principal.
 def detectar_conversacion_previa_por_contacto(estado: EstadoCotizacion) -> str | None:
     """Busca automaticamente memoria previa cuando aparece un contacto."""
     if not estado.contacto or estado.estado_previo_pendiente or estado.intencion == "resume_previous":
@@ -305,7 +319,7 @@ def detectar_conversacion_previa_por_contacto(estado: EstadoCotizacion) -> str |
     return renderizar_respuesta_previa_encontrada(estado, previo)
 
 
-# Ejecuta la responsabilidad de manejar eleccion previa pendiente.
+# MEMORIA MOCK: maneja si el usuario quiere retomar o descartar una cotizacion recuperada.
 def manejar_eleccion_previa_pendiente(mensaje_usuario: str, estado: EstadoCotizacion) -> tuple[str, EstadoCotizacion] | None:
     """Resuelve si el usuario quiere retomar lo previo o seguir con lo actual."""
     if not estado.estado_previo_pendiente:
@@ -335,7 +349,7 @@ def manejar_eleccion_previa_pendiente(mensaje_usuario: str, estado: EstadoCotiza
     return respuesta, estado
 
 
-# Ejecuta la responsabilidad de aplicar cambios productos.
+# MEMORIA TEMPORAL/PRODUCTOS: aplica agregar, quitar o reemplazar productos solicitados.
 def aplicar_cambios_productos(estado: EstadoCotizacion, changes: dict[str, list[str]]) -> None:
     """Aplica cambios solicitados por el usuario sobre productos en curso."""
     had_blocking_product_issue = bool(estado.productos_sin_stock or estado.productos_solicitados_no_soportados)
@@ -378,7 +392,7 @@ def aplicar_cambios_productos(estado: EstadoCotizacion, changes: dict[str, list[
         estado.dimensionamiento = None
 
 
-# Ejecuta la responsabilidad de debe fusionar productos solicitados.
+# VALIDACION DE PRODUCTOS: decide si los productos nuevos deben sumarse al pedido actual.
 def debe_fusionar_productos_solicitados(intencion: str | None, changes: dict) -> bool:
     """Evita reinsertar productos cuando el usuario esta quitando o reemplazando."""
     if intencion != "modify_request":
@@ -386,7 +400,7 @@ def debe_fusionar_productos_solicitados(intencion: str | None, changes: dict) ->
     return bool(changes.get("add")) and not any(changes.get(key) for key in ["remove", "replace_from", "replace_to"])
 
 
-# Ejecuta la responsabilidad de aplicar accion agente a intencion.
+# GUARDRAIL DE DECISION: aplica la accion validada del agente sobre la intencion del estado.
 def aplicar_accion_agente_a_intencion(accion: str, estado: EstadoCotizacion, mensaje_usuario: str) -> None:
     """Convierte la decision del agente en una intencion ejecutable."""
     mapping = {
@@ -410,7 +424,7 @@ def aplicar_accion_agente_a_intencion(accion: str, estado: EstadoCotizacion, men
         estado.intencion = "recommendation"
 
 
-# Ejecuta la responsabilidad de encontrar campos faltantes.
+# VALIDACION DE MINIMOS: calcula que datos faltan antes de consultar tools de negocio.
 def encontrar_campos_faltantes(estado: EstadoCotizacion) -> list[str]:
     """Calcula datos minimos faltantes antes de consultar tools de negocio."""
     missing = []
@@ -423,7 +437,7 @@ def encontrar_campos_faltantes(estado: EstadoCotizacion) -> list[str]:
     return missing
 
 
-# Ejecuta la responsabilidad de pedir campos faltantes.
+# RESPUESTA GUIADA: genera una pregunta clara para completar los datos minimos faltantes.
 def pedir_campos_faltantes(campos_faltantes: list[str]) -> str:
     """Construye una pregunta breve para pedir los campos faltantes."""
     labels = {
@@ -446,7 +460,7 @@ def pedir_campos_faltantes(campos_faltantes: list[str]) -> str:
     )
 
 
-# Ejecuta la responsabilidad de priorizar campos faltantes.
+# VALIDACION DE MINIMOS: ordena los faltantes para pedir primero lo indispensable.
 def priorizar_campos_faltantes(campos_faltantes: list[str]) -> list[str]:
     """Agrupa faltantes para no pedir demasiadas cosas en un solo turno."""
     priority_groups = [
@@ -461,7 +475,7 @@ def priorizar_campos_faltantes(campos_faltantes: list[str]) -> list[str]:
     return campos_faltantes[:3]
 
 
-# Ejecuta la responsabilidad de pedir campos faltantes para estado.
+# RESPUESTA GUIADA: decide si pedir datos generales o productos segun el estado actual.
 def pedir_campos_faltantes_para_estado(estado: EstadoCotizacion) -> str:
     """Elige la pregunta adecuada segun el tipo de dato faltante."""
     if estado.campos_faltantes == ["fecha_evento"]:
@@ -474,7 +488,7 @@ def pedir_campos_faltantes_para_estado(estado: EstadoCotizacion) -> str:
     return respuesta
 
 
-# Ejecuta la responsabilidad de pedir productos con catalogo.
+# TOOL MOCK/CATALOGO: lista productos y servicios mock disponibles para que el usuario elija.
 def pedir_productos_con_catalogo(estado: EstadoCotizacion) -> str:
     """Muestra opciones de catalogo cuando faltan productos/servicios."""
     catalog_result = mock_buscar_catalogo(estado)
@@ -510,7 +524,7 @@ def pedir_productos_con_catalogo(estado: EstadoCotizacion) -> str:
     )
 
 
-# Ejecuta la responsabilidad de paquetes seleccionables para estado.
+# TOOL MOCK/CATALOGO: filtra paquetes mock compatibles con el estado de la cotizacion.
 def paquetes_seleccionables_para_estado(estado: EstadoCotizacion) -> list[dict]:
     """Lista paquetes que tienen sentido para el evento y capacidad."""
     packages = []
@@ -523,7 +537,7 @@ def paquetes_seleccionables_para_estado(estado: EstadoCotizacion) -> list[dict]:
     return packages
 
 
-# Ejecuta la responsabilidad de mensaje fecha faltante.
+# VALIDACION DE FECHA: explica si falta dia, mes o anio cuando la fecha esta incompleta.
 def mensaje_fecha_faltante(estado: EstadoCotizacion) -> str:
     """Explica si falta dia, mes o toda la fecha."""
     dia = estado.fecha_parcial.get("dia")
@@ -535,7 +549,7 @@ def mensaje_fecha_faltante(estado: EstadoCotizacion) -> str:
     return "Para seguir necesito la fecha completa del evento, por ejemplo: `4 de diciembre`."
 
 
-# Ejecuta la responsabilidad de fusionar fecha parcial.
+# VALIDACION DE FECHA: completa la fecha solo cuando hay dia, mes y anio suficientes.
 def fusionar_fecha_parcial(estado: EstadoCotizacion, fecha_parcial: dict[str, int | None]) -> None:
     """Combina partes de fecha dadas en distintos turnos."""
     if (
@@ -549,11 +563,27 @@ def fusionar_fecha_parcial(estado: EstadoCotizacion, fecha_parcial: dict[str, in
             estado.fecha_parcial[key] = fecha_parcial[key]
     if estado.fecha_parcial.get("dia") and estado.fecha_parcial.get("mes"):
         anio = estado.fecha_parcial.get("anio") or 2026
-        estado.fecha_evento = date(anio, estado.fecha_parcial["mes"], estado.fecha_parcial["dia"]).isoformat()
-        estado.fecha_parcial = {"dia": None, "mes": None, "anio": None}
+        dia = estado.fecha_parcial["dia"]
+        mes = estado.fecha_parcial["mes"]
+        try:
+            estado.fecha_evento = date(anio, mes, dia).isoformat()
+            estado.fecha_parcial = {"dia": None, "mes": None, "anio": None}
+        except ValueError:
+            estado.fecha_evento = None
+            estado.errores_validacion_campos.append(f"La fecha indicada no es valida: {dia:02d}/{mes:02d}/{anio}.")
 
 
-# Ejecuta la responsabilidad de pedir confirmacion derivacion.
+# GUARDRAIL DE FECHA: valida fechas ISO entregadas por reglas o por el extractor LLM antes de persistirlas.
+def fecha_evento_es_valida(value: str) -> bool:
+    """Confirma que la fecha venga en formato ISO y exista en el calendario."""
+    try:
+        date.fromisoformat(value)
+        return True
+    except ValueError:
+        return False
+
+
+# DERIVACION HUMANA: ofrece WhatsApp solo como opcion, sin derivar hasta que el usuario lo pida.
 def pedir_confirmacion_derivacion(estado: EstadoCotizacion) -> str:
     """Ofrece derivacion humana para casos que el flujo no puede resolver."""
     if estado.intencion == "discount_request":
@@ -565,7 +595,7 @@ def pedir_confirmacion_derivacion(estado: EstadoCotizacion) -> str:
     return f"{reason} Si te parece, puedo dejar el caso listo para que un asesor lo continue por WhatsApp."
 
 
-# Ejecuta la responsabilidad de renderizar respuesta recomendacion.
+# RESPUESTA DE NEGOCIO: muestra recomendacion basada en catalogo, cobertura, stock y precios mock.
 def renderizar_respuesta_recomendacion(estado: EstadoCotizacion) -> str:
     """Redacta la recomendacion validada antes de emitir cotizacion."""
     option = estado.opcion_recomendada or {}
@@ -599,7 +629,7 @@ def renderizar_respuesta_recomendacion(estado: EstadoCotizacion) -> str:
     )
 
 
-# Ejecuta la responsabilidad de renderizar respuesta cotizacion.
+# RESPUESTA DE COTIZACION: muestra el artefacto final y resumen economico de la cotizacion mock.
 def renderizar_respuesta_cotizacion(estado: EstadoCotizacion) -> str:
     """Redacta el detalle de la cotizacion ya generada."""
     cotizacion = estado.cotizacion or {}
@@ -622,7 +652,7 @@ def renderizar_respuesta_cotizacion(estado: EstadoCotizacion) -> str:
     )
 
 
-# Ejecuta la responsabilidad de renderizar respuesta consulta precio.
+# RESPUESTA INFORMATIVA: responde precios puntuales sin modificar la cotizacion en curso.
 def renderizar_respuesta_consulta_precio(mensaje_usuario: str, estado: EstadoCotizacion) -> str:
     """Responde precios informativos sin generar cotizacion."""
     product_matches = buscar_coincidencias_precio(mensaje_usuario)
@@ -678,7 +708,7 @@ def renderizar_respuesta_consulta_precio(mensaje_usuario: str, estado: EstadoCot
     )
 
 
-# Ejecuta la responsabilidad de renderizar resumen validacion.
+# RESPUESTA DE VALIDACION: resume que tools mock fueron consultadas y que resultado dieron.
 def renderizar_resumen_validacion(estado: EstadoCotizacion) -> str:
     """Resume cobertura, catalogo y disponibilidad consultados."""
     package_count = len(estado.opciones_catalogo)
@@ -699,7 +729,7 @@ def renderizar_resumen_validacion(estado: EstadoCotizacion) -> str:
     )
 
 
-# Ejecuta la responsabilidad de buscar coincidencias precio.
+# TOOL MOCK/PRECIOS: encuentra productos del catalogo mencionados en una consulta de precio.
 def buscar_coincidencias_precio(mensaje_usuario: str) -> list[dict]:
     """Busca productos mencionados para responder precio unitario."""
     texto = mensaje_usuario.lower()
@@ -712,7 +742,7 @@ def buscar_coincidencias_precio(mensaje_usuario: str) -> list[dict]:
     return matches
 
 
-# Ejecuta la responsabilidad de buscar coincidencias precio paquete.
+# TOOL MOCK/PRECIOS: encuentra paquetes del catalogo mencionados en una consulta de precio.
 def buscar_coincidencias_precio_paquete(mensaje_usuario: str) -> list[dict]:
     """Busca paquetes mencionados para responder precio base."""
     texto = mensaje_usuario.lower()
@@ -725,7 +755,7 @@ def buscar_coincidencias_precio_paquete(mensaje_usuario: str) -> list[dict]:
     return matches
 
 
-# Ejecuta la responsabilidad de renderizar respuesta sin stock.
+# RESPUESTA DE STOCK: informa faltantes y alternativas sin reemplazar productos automaticamente.
 def renderizar_respuesta_sin_stock(estado: EstadoCotizacion, stock_result: dict) -> str:
     """Informa faltantes de stock y alternativas sin reemplazar automaticamente."""
     missing_lines = []
@@ -749,7 +779,38 @@ def renderizar_respuesta_sin_stock(estado: EstadoCotizacion, stock_result: dict)
     )
 
 
-# Ejecuta la responsabilidad de construir opcion basada en productos.
+# RESPUESTA DE COBERTURA: informa que el distrito esta fuera de alcance y lista distritos disponibles.
+def renderizar_respuesta_sin_cobertura(estado: EstadoCotizacion, coverage: dict) -> str:
+    """Explica la falta de cobertura sin seguir pidiendo el mismo distrito."""
+    estado.derivacion_ofrecida = False
+    distritos_cubiertos = ", ".join(coverage.get("distritos_cubiertos", []))
+    return (
+        f"No tengo cobertura mock para **{estado.distrito}**. "
+        f"El distrito **{estado.distrito}** no esta dentro del alcance de cobertura mock, "
+        "por eso no puedo generar la cotizacion con ese distrito. "
+        f"Por ahora puedo cubrir: {distritos_cubiertos}. "
+        "Si quieres, dime uno de esos distritos y continuo con la cotizacion."
+    )
+
+
+# GUARDRAIL DE CAMPOS: informa datos invalidos antes de pedir faltantes o consultar tools de negocio.
+def renderizar_respuesta_validacion_campos(estado: EstadoCotizacion) -> str:
+    """Explica errores de campos como fechas imposibles sin avanzar con datos invalidos."""
+    errores = "\n".join(f"- {error}" for error in estado.errores_validacion_campos)
+    if any("fecha" in error.lower() for error in estado.errores_validacion_campos):
+        return (
+            "Necesito corregir un dato antes de avanzar:\n\n"
+            f"{errores}\n\n"
+            "Por favor indicame una fecha real del evento, por ejemplo `15 de diciembre de 2026`."
+        )
+    return (
+        "Necesito corregir un dato antes de avanzar:\n\n"
+        f"{errores}\n\n"
+        "Enviame el dato corregido y continuo con la cotizacion."
+    )
+
+
+# TOOL MOCK/RECOMENDACION: arma una opcion cotizable usando productos disponibles validados.
 def construir_opcion_basada_en_productos(estado: EstadoCotizacion, available_items: list[dict], similar_packages: list[dict]) -> dict:
     """Construye una opcion personalizada usando productos con stock."""
     quote_items = []
@@ -784,7 +845,7 @@ def construir_opcion_basada_en_productos(estado: EstadoCotizacion, available_ite
     }
 
 
-# Ejecuta la responsabilidad de renderizar respuesta solicitud imagen.
+# RESPUESTA MULTIMODAL: muestra imagen solo si ya existe cotizacion y el usuario la solicita.
 def renderizar_respuesta_solicitud_imagen(estado: EstadoCotizacion) -> str:
     """Permite mostrar imagen referencial solo despues de cotizar."""
     if not estado.cotizacion or not estado.opcion_recomendada:
@@ -794,7 +855,7 @@ def renderizar_respuesta_solicitud_imagen(estado: EstadoCotizacion) -> str:
     return "Listo. Muestro una imagen referencial del paquete cotizado debajo del chat."
 
 
-# Ejecuta la responsabilidad de renderizar respuesta cierre.
+# RESPUESTA DE CIERRE: cierra la conversacion cuando el usuario ya no requiere mas acciones.
 def renderizar_respuesta_cierre(estado: EstadoCotizacion) -> str:
     """Cierra la conversacion indicando si quedo cotizacion asociada."""
     if estado.cotizacion:
@@ -805,7 +866,7 @@ def renderizar_respuesta_cierre(estado: EstadoCotizacion) -> str:
     return "Perfecto, cierro la conversacion sin cotizacion generada. Puedes reiniciar desde el boton lateral para empezar otra solicitud."
 
 
-# Ejecuta la responsabilidad de renderizar respuesta consulta memoria.
+# RESPUESTA DE MEMORIA: muestra al usuario que datos estan guardados en memoria temporal.
 def renderizar_respuesta_consulta_memoria(estado: EstadoCotizacion) -> str:
     """Responde reclamos o consultas sobre datos ya capturados."""
     if estado.nombre_cliente:
@@ -822,7 +883,7 @@ def renderizar_respuesta_consulta_memoria(estado: EstadoCotizacion) -> str:
     )
 
 
-# Ejecuta la responsabilidad de manejar retomar previa.
+# MEMORIA MOCK: solicita contacto o recupera cotizacion anterior segun identificador disponible.
 def manejar_retomar_previa(estado: EstadoCotizacion) -> tuple[str, EstadoCotizacion]:
     """Retoma una cotizacion previa si el usuario confirma identidad."""
     if not estado.contacto:
@@ -858,7 +919,7 @@ def manejar_retomar_previa(estado: EstadoCotizacion) -> tuple[str, EstadoCotizac
     return respuesta, retomado
 
 
-# Ejecuta la responsabilidad de tiene memoria cotizacion util.
+# VALIDACION DE MEMORIA: verifica si una cotizacion recuperada tiene datos suficientes para retomarse.
 def tiene_memoria_cotizacion_util(estado: EstadoCotizacion) -> bool:
     """Evita tratar registros vacios o solo-contacto como cotizaciones previas."""
     datos_evento = [estado.tipo_evento, estado.asistentes, estado.fecha_evento, estado.distrito]
@@ -870,7 +931,7 @@ def tiene_memoria_cotizacion_util(estado: EstadoCotizacion) -> bool:
     )
 
 
-# Ejecuta la responsabilidad de renderizar respuesta previa encontrada.
+# RESPUESTA DE MEMORIA: presenta una cotizacion previa encontrada antes de retomarla.
 def renderizar_respuesta_previa_encontrada(estado: EstadoCotizacion, previo: EstadoCotizacion) -> str:
     """Compara datos actuales y previos antes de avanzar."""
     return (
@@ -882,7 +943,7 @@ def renderizar_respuesta_previa_encontrada(estado: EstadoCotizacion, previo: Est
     )
 
 
-# Ejecuta la responsabilidad de renderizar respuesta previa retomada.
+# RESPUESTA DE MEMORIA: confirma que la cotizacion previa fue cargada al estado actual.
 def renderizar_respuesta_previa_retomada(estado: EstadoCotizacion) -> str:
     """Confirma que se cargo la cotizacion previa en la sesion actual."""
     return (
@@ -891,7 +952,7 @@ def renderizar_respuesta_previa_retomada(estado: EstadoCotizacion) -> str:
     )
 
 
-# Ejecuta la responsabilidad de renderizar resumen pedido compacto.
+# RESPUESTA DE MEMORIA: resume datos principales del pedido en formato corto.
 def renderizar_resumen_pedido_compacto(estado: EstadoCotizacion) -> str:
     """Resume una solicitud para comparar memoria previa contra datos actuales."""
     products = ", ".join(estado.productos_solicitados) if estado.productos_solicitados else "pendiente"
@@ -906,7 +967,7 @@ def renderizar_resumen_pedido_compacto(estado: EstadoCotizacion) -> str:
     )
 
 
-# Ejecuta la responsabilidad de renderizar respuesta revision pedido.
+# RESPUESTA DE REVISION: permite revisar o modificar el pedido antes de cotizar.
 def renderizar_respuesta_revision_pedido(estado: EstadoCotizacion) -> str:
     """Muestra el pedido actual y ejemplos para modificarlo."""
     products = ", ".join(estado.productos_solicitados) if estado.productos_solicitados else "sin productos/servicios elegidos todavia"
@@ -932,7 +993,7 @@ def renderizar_respuesta_revision_pedido(estado: EstadoCotizacion) -> str:
     )
 
 
-# Ejecuta la responsabilidad de renderizar respuesta saludo.
+# RESPUESTA CONVERSACIONAL: saluda y orienta sin asumir datos de cotizacion.
 def renderizar_respuesta_saludo(estado: EstadoCotizacion) -> str:
     """Saluda y abre la recoleccion inicial de datos."""
     return (
@@ -941,7 +1002,7 @@ def renderizar_respuesta_saludo(estado: EstadoCotizacion) -> str:
     )
 
 
-# Ejecuta la responsabilidad de renderizar respuesta derivacion.
+# RESPUESTA DERIVACION HUMANA: arma enlace mock de WhatsApp cuando el usuario lo solicito.
 def renderizar_respuesta_derivacion(handoff: dict) -> str:
     """Redacta la derivacion mock preparada para WhatsApp."""
     summary = handoff["summary"]
@@ -954,7 +1015,7 @@ def renderizar_respuesta_derivacion(handoff: dict) -> str:
     )
 
 
-# Ejecuta la responsabilidad de renderizar respuesta rag.
+# TOOL MOCK/RAG: responde politicas o conocimiento de negocio desde base mock.
 def renderizar_respuesta_rag(query: str) -> str:
     """Responde consultas de politica usando el RAG mock."""
     resultado = mock_buscar_rag(query)
@@ -964,14 +1025,14 @@ def renderizar_respuesta_rag(query: str) -> str:
     return "Segun el RAG mock:\n\n" + "\n".join(lines)
 
 
-# Ejecuta logica interna para parece confirmacion cotizacion.
+# VALIDACION DE INTENCION: detecta confirmaciones explicitas para generar cotizacion.
 def _parece_confirmacion_cotizacion(message: str) -> bool:
     """Detecta confirmaciones cortas para emitir cotizacion."""
     texto = message.lower()
     return any(term in texto for term in ["si cotiza", "sí cotiza", "cotizalo", "cotízalo", "genera la cotizacion", "genera la cotización"])
 
 
-# Ejecuta logica interna para finalizar.
+# SALIDA DEL WORKFLOW: centraliza el retorno de respuesta, estado y etapa.
 def _finalizar(respuesta: str, estado: EstadoCotizacion, etapa: str) -> tuple[str, EstadoCotizacion]:
     """Aplica pulido LLM, agrega memoria visible, guarda estado y retorna."""
     estado.etapa = etapa
@@ -986,7 +1047,7 @@ def _finalizar(respuesta: str, estado: EstadoCotizacion, etapa: str) -> tuple[st
     return respuesta_con_memoria, estado
 
 
-# Ejecuta la responsabilidad de renderizar memoria temporal.
+# UI/MEMORIA TEMPORAL: muestra sutilmente que datos entiende y conserva el agente.
 def renderizar_memoria_temporal(estado: EstadoCotizacion) -> str:
     """Genera el resumen sutil de memoria mostrado bajo cada respuesta."""
     captured = []
@@ -1022,7 +1083,7 @@ def renderizar_memoria_temporal(estado: EstadoCotizacion) -> str:
     return f"_Memoria temporal: {captured_text}. Datos minimos completos para continuar._"
 
 
-# Ejecuta la responsabilidad de texto fecha parcial.
+# UI/VALIDACION DE FECHA: convierte fecha incompleta en texto entendible para el usuario.
 def texto_fecha_parcial(estado: EstadoCotizacion) -> str:
     """Convierte una fecha parcial en texto legible."""
     dia = estado.fecha_parcial.get("dia")
@@ -1036,7 +1097,7 @@ def texto_fecha_parcial(estado: EstadoCotizacion) -> str:
     return "incompleta"
 
 
-# Ejecuta la responsabilidad de nombre mes.
+# UTILIDAD DE FECHA: traduce numero de mes a nombre en espanol.
 def nombre_mes(mes: int) -> str:
     """Devuelve el nombre en espanol de un numero de mes."""
     names = {
@@ -1056,7 +1117,7 @@ def nombre_mes(mes: int) -> str:
     return names.get(mes, f"mes {mes}")
 
 
-# Ejecuta logica interna para etiquetas campos faltantes.
+# UI/VALIDACION DE MINIMOS: convierte campos internos faltantes en etiquetas legibles.
 def _etiquetas_campos_faltantes(campos_faltantes: list[str]) -> list[str]:
     """Traduce nombres internos de campos a etiquetas para el usuario."""
     labels = {
@@ -1071,7 +1132,7 @@ def _etiquetas_campos_faltantes(campos_faltantes: list[str]) -> list[str]:
     return [labels[field] for field in campos_faltantes]
 
 
-# Ejecuta la responsabilidad de renderizar respuesta productos no soportados.
+# RESPUESTA DE CATALOGO: informa productos no encontrados y sugiere alternativas parecidas.
 def renderizar_respuesta_productos_no_soportados(estado: EstadoCotizacion) -> str:
     """Explica productos no soportados y alternativas conocidas."""
     lines = []
@@ -1094,7 +1155,7 @@ def renderizar_respuesta_productos_no_soportados(estado: EstadoCotizacion) -> st
     )
 
 
-# Ejecuta la responsabilidad de productos similares para.
+# TOOL MOCK/CATALOGO: busca productos alternativos por categoria cuando no existe el pedido exacto.
 def productos_similares_para(product: str) -> list[str]:
     """Devuelve alternativas simples para productos no soportados."""
     suggestions = {

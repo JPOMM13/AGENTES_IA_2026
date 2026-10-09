@@ -4,11 +4,11 @@ from pathlib import Path
 
 import streamlit as st
 
-from app.artifacts import refrescar_artefacto_visual_si_es_necesario
+from app.artefactos import refrescar_artefacto_visual_si_es_necesario
 from app.estado import EstadoCotizacion
 
 
-# Ejecuta la responsabilidad de renderizar panel estado.
+# UI STREAMLIT: muestra el estado interno para depuracion del flujo del agente.
 def renderizar_panel_estado(estado: EstadoCotizacion) -> None:
     """Muestra estado, dimensionamiento, derivacion y trazas en sidebar."""
     st.sidebar.subheader("Estado de la solicitud")
@@ -26,7 +26,7 @@ def renderizar_panel_estado(estado: EstadoCotizacion) -> None:
         st.json(estado.trazas[-12:])
 
 
-# Ejecuta la responsabilidad de renderizar tarjeta imagen.
+# UI STREAMLIT: muestra imagen del evento solo cuando existe artefacto de cotizacion.
 def renderizar_tarjeta_imagen(estado: EstadoCotizacion) -> None:
     """Muestra la imagen generada para la cotizacion o una imagen solicitada."""
     option = estado.opcion_recomendada
@@ -48,7 +48,7 @@ def renderizar_tarjeta_imagen(estado: EstadoCotizacion) -> None:
         st.caption("Imagen generada como artefacto visual de la cotizacion. No reemplaza la validacion de precio, cobertura ni disponibilidad.")
 
 
-# Ejecuta la responsabilidad de renderizar resumen imagen evento.
+# UI STREAMLIT: muestra resumen lateral de evento, productos y servicios junto a la imagen.
 def renderizar_resumen_imagen_evento(estado: EstadoCotizacion) -> None:
     """Muestra el resumen comercial de la cotizacion junto a la imagen."""
     cotizacion = estado.cotizacion or {}
@@ -88,7 +88,7 @@ def renderizar_resumen_imagen_evento(estado: EstadoCotizacion) -> None:
     )
 
 
-# Ejecuta la responsabilidad de renderizar tarjeta cotizacion.
+# UI STREAMLIT: muestra totales y detalle economico de la cotizacion generada.
 def renderizar_tarjeta_cotizacion(estado: EstadoCotizacion) -> None:
     """Muestra tarjeta resumida de la cotizacion generada."""
     if not estado.cotizacion:

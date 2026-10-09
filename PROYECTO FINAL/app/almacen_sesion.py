@@ -12,7 +12,7 @@ from app.estado import EstadoCotizacion
 STORE_PATH = Path(__file__).resolve().parent / "data" / "mock_session_memory.json"
 
 
-# Ejecuta la responsabilidad de guardar estado conversacion.
+# MEMORIA PERSISTENTE MOCK: guarda la ultima cotizacion consolidada por contacto; en real iria a NoSQL/PostgreSQL.
 def guardar_estado_conversacion(estado: EstadoCotizacion) -> None:
     """Guarda el estado si ya existe una identidad minima del cotizante."""
     # MOCK: ESTA MEMORIA ENTRE SESIONES DEBERIA GUARDARSE EN POSTGRESQL/NOSQL USANDO CONTACT COMO IDENTIFICADOR PRINCIPAL.
@@ -28,7 +28,7 @@ def guardar_estado_conversacion(estado: EstadoCotizacion) -> None:
     _escribir_almacen(store)
 
 
-# Ejecuta la responsabilidad de buscar conversacion previa.
+# MEMORIA PERSISTENTE MOCK: busca una cotizacion anterior por contacto para poder retomarla.
 def buscar_conversacion_previa(nombre_cliente: str | None, contacto: str | None) -> EstadoCotizacion | None:
     """Busca una conversacion anterior usando contacto como identidad principal."""
     # MOCK: ESTA CONSULTA DEBERIA IR A POSTGRESQL O NOSQL BUSCANDO POR TELEFONO/CORREO, NO POR NOMBRE.
@@ -40,7 +40,7 @@ def buscar_conversacion_previa(nombre_cliente: str | None, contacto: str | None)
     return EstadoCotizacion.desde_diccionario_persistido(record)
 
 
-# Ejecuta la responsabilidad de hidratar estado.
+# MEMORIA PERSISTENTE MOCK: copia datos recuperados hacia la sesion activa actual.
 def hidratar_estado(destino: EstadoCotizacion, origen: EstadoCotizacion) -> EstadoCotizacion:
     """Carga una conversacion previa dentro de la nueva sesion actual."""
     current_session_id = destino.id_sesion
@@ -51,13 +51,13 @@ def hidratar_estado(destino: EstadoCotizacion, origen: EstadoCotizacion) -> Esta
     return EstadoCotizacion.desde_diccionario_persistido(restored)
 
 
-# Ejecuta logica interna para clave contacto.
+# MEMORIA PERSISTENTE MOCK: normaliza el contacto usado como clave de busqueda.
 def _clave_contacto(contacto: str) -> str:
     """Normaliza telefono o correo para identificar al cliente."""
     return re.sub(r"\D+", "", contacto.lower()) or contacto.strip().lower()
 
 
-# Ejecuta logica interna para tiene datos para memoria persistente.
+# VALIDACION DE MEMORIA: guarda solo estados con datos utiles para retomar despues.
 def _tiene_datos_para_memoria_persistente(estado: EstadoCotizacion) -> bool:
     """Evita guardar busquedas vacias como si fueran cotizaciones previas."""
     return any(
@@ -73,7 +73,7 @@ def _tiene_datos_para_memoria_persistente(estado: EstadoCotizacion) -> bool:
     )
 
 
-# Ejecuta logica interna para leer almacen.
+# MEMORIA PERSISTENTE MOCK: lee el JSON local que simula una base NoSQL/PostgreSQL.
 def _leer_almacen() -> dict[str, Any]:
     """Lee el archivo local de memoria mock y devuelve un diccionario seguro."""
     if not STORE_PATH.exists():
@@ -84,7 +84,7 @@ def _leer_almacen() -> dict[str, Any]:
         return {}
 
 
-# Ejecuta logica interna para escribir almacen.
+# MEMORIA PERSISTENTE MOCK: escribe el JSON local que simula persistencia real.
 def _escribir_almacen(store: dict[str, Any]) -> None:
     """Persiste el diccionario de memoria mock en disco."""
     STORE_PATH.write_text(json.dumps(store, ensure_ascii=False, indent=2), encoding="utf-8")

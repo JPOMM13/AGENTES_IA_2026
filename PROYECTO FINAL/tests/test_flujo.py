@@ -1,10 +1,10 @@
 from app.estado import EstadoCotizacion
-from app.workflow import manejar_mensaje
-import app.session_store as session_store
-import app.redis_session_store as redis_session_store
-import app.artifacts as artifacts
-import app.tools.extraction as extraction_tools
-import app.workflow as workflow
+from app.flujo import manejar_mensaje
+import app.almacen_sesion as session_store
+import app.almacen_sesion_redis as redis_session_store
+import app.artefactos as artifacts
+import app.tools.extraccion as extraction_tools
+import app.flujo as workflow
 
 
 # Prueba el comportamiento de test flujo recomendacion completo.
@@ -27,6 +27,74 @@ def test_pide_campos_faltantes():
     assert "asistentes" in respuesta
     assert "persona que cotiza" not in respuesta
     assert estado.opcion_recomendada is None
+
+
+# Prueba que un distrito declarado pero fuera de cobertura no quede como campo faltante.
+def test_distrito_fuera_de_cobertura_informa_alcance():
+    estado = EstadoCotizacion()
+
+    respuesta, estado = manejar_mensaje(
+        "Soy Juan Perez, mi telefono es 999888777. Necesito cerveza para un cumpleaños de 50 personas el 5 de diciembre en Alto Selva Alegre",
+        estado,
+    )
+
+    assert estado.distrito == "Alto Selva Alegre"
+    assert "distrito" not in estado.campos_faltantes
+    assert estado.cobertura_ok is False
+    assert "no esta dentro del alcance" in respuesta
+    assert "Miraflores" in respuesta or "miraflores" in respuesta
+
+
+# Prueba que una fecha escrita como "en diciembre 5" no se capture como distrito libre.
+def test_fecha_con_en_no_se_confunde_como_distrito():
+    estado = EstadoCotizacion()
+
+    campos = extraction_tools.extraer_intencion_y_campos("es para un cumpleaños para 50 personas en diciembre 5", estado)
+
+    assert campos["fields"].get("distrito") is None
+
+
+# Prueba que una fecha imposible se rechace como guardrail de campo antes de avanzar.
+def test_fecha_invalida_se_informa_y_no_se_guarda():
+    estado = EstadoCotizacion()
+
+    respuesta, estado = manejar_mensaje(
+        "Soy Juan Perez, mi telefono es 999888777. Necesito cerveza para un cumpleaños de 50 personas el 31 de febrero del 2026 en Miraflores",
+        estado,
+    )
+
+    assert estado.fecha_evento is None
+    assert estado.errores_validacion_campos
+    assert "fecha indicada no es valida" in respuesta
+    assert "31/02/2026" in respuesta
+
+
+# Prueba que un distrito fuera de cobertura se informe aunque falten contacto o productos.
+def test_distrito_fuera_cobertura_se_valida_temprano():
+    estado = EstadoCotizacion()
+
+    respuesta, estado = manejar_mensaje(
+        "cumpleaños para 45 personas en Alto Selva Alegre el 15 de diciembre del 2026",
+        estado,
+    )
+
+    assert estado.distrito == "Alto Selva Alegre"
+    assert estado.cobertura_ok is False
+    assert "no esta dentro del alcance" in respuesta
+    assert "distrito" not in estado.campos_faltantes
+
+
+# Prueba que una respuesta corta al pedido de distrito no se tome como nombre del cotizante.
+def test_respuesta_corta_distrito_fuera_cobertura_no_es_nombre():
+    estado = EstadoCotizacion(tipo_evento="cumpleanos", asistentes=45, fecha_evento="2026-12-15")
+    estado.campos_faltantes = ["distrito"]
+
+    respuesta, estado = manejar_mensaje("Alto selva alegre", estado)
+
+    assert estado.distrito == "Alto Selva Alegre"
+    assert estado.nombre_cliente is None
+    assert estado.cobertura_ok is False
+    assert "no esta dentro del alcance" in respuesta
 
 
 # Prueba el comportamiento de test cotizacion despues recomendacion.
@@ -235,6 +303,18 @@ def test_fecha_parcial_solo_dia_indica_mes_faltante():
     respuesta, estado = manejar_mensaje("para el 4", estado)
     assert "falta el mes" in respuesta
     assert estado.fecha_parcial["dia"] == 4
+
+
+# Prueba que combinar dia y mes imposibles no rompa el flujo y pida una fecha real.
+def test_fecha_parcial_invalida_se_rechaza_al_completar():
+    estado = EstadoCotizacion()
+
+    _, estado = manejar_mensaje("para el 31", estado)
+    respuesta, estado = manejar_mensaje("en febrero", estado)
+
+    assert estado.fecha_evento is None
+    assert estado.errores_validacion_campos
+    assert "fecha indicada no es valida" in respuesta
 
 
 # Prueba el comportamiento de test numero asistentes no se usa como dia evento.

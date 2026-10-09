@@ -20,7 +20,7 @@ AccionAgente = Literal[
 ]
 
 
-# Ejecuta la responsabilidad de validar decision agentica.
+# GUARDRAIL DE DECISION: valida y corrige la accion propuesta por el LLM antes de tocar el workflow.
 def validar_decision_agentica(accion: str | None, mensaje_usuario: str, estado: EstadoCotizacion) -> AccionAgente | None:
     """Corrige decisiones del LLM antes de permitir que cambien el flujo."""
     texto = mensaje_usuario.lower()
@@ -88,7 +88,7 @@ def validar_decision_agentica(accion: str | None, mensaje_usuario: str, estado: 
     return None
 
 
-# Ejecuta la responsabilidad de es solicitud nueva cotizacion.
+# VALIDACION DE INTENCION: detecta si el usuario quiere iniciar una cotizacion distinta.
 def es_solicitud_nueva_cotizacion(texto: str) -> bool:
     """Detecta si el usuario quiere abandonar la cotizacion actual y crear otra."""
     texto = texto.lower()
@@ -117,7 +117,7 @@ def es_solicitud_nueva_cotizacion(texto: str) -> bool:
     return any(re.search(patron, texto) for patron in patrones)
 
 
-# Ejecuta la responsabilidad de es solicitud recuperar memoria.
+# VALIDACION DE INTENCION: detecta frases para retomar una cotizacion previa desde memoria.
 def es_solicitud_recuperar_memoria(texto: str) -> bool:
     """Detecta si el usuario quiere retomar informacion de una sesion anterior."""
     frases = [
@@ -169,7 +169,7 @@ def es_solicitud_recuperar_memoria(texto: str) -> bool:
     return any(re.search(patron, texto) for patron in patrones)
 
 
-# Ejecuta la responsabilidad de es derivacion humana explicita.
+# GUARDRAIL DE DERIVACION: permite derivar a humano solo si el usuario lo pide explicitamente.
 def es_derivacion_humana_explicita(texto: str) -> bool:
     """Valida que la derivacion humana haya sido pedida por el usuario."""
     return any(

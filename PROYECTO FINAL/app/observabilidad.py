@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import os
 
-from app.llm_config import cargar_archivo_env
+from app.configuracion_llm import cargar_archivo_env
 
 
 # RESUMEN: ESTE MODULO CENTRALIZA LA CONFIGURACION DE OBSERVABILIDAD.
@@ -10,7 +10,7 @@ from app.llm_config import cargar_archivo_env
 # Y LANGGRAPH ENVIAN TRAZAS A LANGSMITH AUTOMATICAMENTE.
 
 
-# Ejecuta la responsabilidad de configurar langsmith.
+# OBSERVABILIDAD: configura LangSmith para trazar nodos, agentes y llamadas del workflow.
 def configurar_langsmith() -> None:
     """Carga variables de entorno y habilita aliases compatibles de LangSmith."""
     cargar_archivo_env()

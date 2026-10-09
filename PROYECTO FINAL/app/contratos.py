@@ -11,7 +11,7 @@ class ContratoDisponibilidadHerramientas:
     puede_generar_cotizacion: bool
     puede_mostrar_imagen: bool
 
-    # Ejecuta la responsabilidad de a diccionario.
+    # CONTRATO DE TOOLS: expone prerequisitos en formato dict para que el agente decisor los consuma.
     def a_diccionario(self) -> dict[str, bool]:
         """Convierte el contrato a dict para enviarlo al agente LLM."""
         return {

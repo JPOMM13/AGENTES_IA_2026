@@ -37,7 +37,7 @@ MONTHS = {
 }
 
 
-# Ejecuta la responsabilidad de extraer intencion y campos.
+# TOOL/EXTRACCION HIBRIDA: combina reglas y agente extractor para obtener intencion y campos del usuario.
 def extraer_intencion_y_campos(message: str, estado: EstadoCotizacion) -> dict[str, Any]:
     """Extrae intencion y campos del mensaje combinando reglas y agente."""
     texto = message.lower()
@@ -60,15 +60,17 @@ def extraer_intencion_y_campos(message: str, estado: EstadoCotizacion) -> dict[s
     if asistentes:
         fields["asistentes"] = asistentes
 
-    fecha_evento = _extraer_fecha(texto)
+    fecha_evento, error_fecha = _extraer_fecha_validada(texto)
+    if error_fecha:
+        fields.setdefault("errores_validacion_campos", []).append(error_fecha)
     if fecha_evento:
         fields["fecha_evento"] = fecha_evento
-    else:
+    elif not error_fecha:
         fecha_parcial = _extraer_fecha_parcial(texto)
         if fecha_parcial:
             fields["fecha_parcial"] = fecha_parcial
 
-    distrito = _extraer_distrito(message)
+    distrito = _extraer_distrito(message, esperando_distrito="distrito" in estado.campos_faltantes)
     if distrito:
         fields["distrito"] = distrito
 
@@ -76,11 +78,12 @@ def extraer_intencion_y_campos(message: str, estado: EstadoCotizacion) -> dict[s
     if presupuesto:
         fields["presupuesto"] = presupuesto
 
-    nombre_cliente = _extraer_nombre_cliente(message)
-    if not nombre_cliente and "nombre_cliente" in estado.campos_faltantes:
-        nombre_cliente = _extraer_nombre_cliente_contextual(message)
-    if nombre_cliente:
-        fields["nombre_cliente"] = nombre_cliente
+    if not (distrito and _mensaje_es_distrito_suelto(message, distrito)):
+        nombre_cliente = _extraer_nombre_cliente(message)
+        if not nombre_cliente and "nombre_cliente" in estado.campos_faltantes:
+            nombre_cliente = _extraer_nombre_cliente_contextual(message)
+        if nombre_cliente:
+            fields["nombre_cliente"] = nombre_cliente
 
     contacto = _extraer_contacto(message)
     if contacto:
@@ -120,7 +123,7 @@ def extraer_intencion_y_campos(message: str, estado: EstadoCotizacion) -> dict[s
     return {"intencion": intencion, "fields": fields}
 
 
-# Ejecuta logica interna para detectar intencion.
+# VALIDACION DE INTENCION: clasifica el mensaje antes de decidir la siguiente accion.
 def _detectar_intencion(texto: str, estado: EstadoCotizacion) -> str:
     """Clasifica la intencion principal del usuario para dirigir el flujo."""
     if es_solicitud_nueva_cotizacion(texto):
@@ -159,7 +162,7 @@ def _detectar_intencion(texto: str, estado: EstadoCotizacion) -> str:
         return "general_question"
     return "recommendation"
 
-# Ejecuta logica interna para es solo saludo.
+# VALIDACION CONVERSACIONAL: detecta saludos sin datos de cotizacion.
 def _es_solo_saludo(texto: str) -> bool:
     """Distingue un saludo simple de una solicitud de cotizacion."""
     cleaned = re.sub(r"[^\wáéíóúñ ]+", " ", texto.lower()).strip()
@@ -188,7 +191,7 @@ def _es_solo_saludo(texto: str) -> bool:
     return any(signal in cleaned for signal in greeting_signals) and not any(signal in cleaned for signal in quote_signals)
 
 
-# Ejecuta logica interna para extraer tipo evento.
+# EXTRACCION REGLADA: obtiene tipo de evento desde patrones simples.
 def _extraer_tipo_evento(texto: str) -> str | None:
     """Normaliza el tipo de evento a una categoria soportada."""
     for canonical, aliases in EVENT_ALIASES.items():
@@ -199,7 +202,7 @@ def _extraer_tipo_evento(texto: str) -> str | None:
     return None
 
 
-# Ejecuta logica interna para extraer asistentes.
+# EXTRACCION REGLADA: obtiene cantidad de asistentes cuando aparece explicitamente.
 def _extraer_asistentes(texto: str) -> int | None:
     """Extrae cantidad de asistentes cuando aparece con contexto textual."""
     patterns = [
@@ -213,7 +216,7 @@ def _extraer_asistentes(texto: str) -> int | None:
     return None
 
 
-# Ejecuta logica interna para extraer asistentes contextuales.
+# EXTRACCION REGLADA: interpreta numeros contextuales como asistentes cuando corresponde.
 def _extraer_asistentes_contextuales(texto: str) -> int | None:
     """Interpreta un numero suelto como asistentes solo si el flujo lo esperaba."""
     match = re.fullmatch(r"\s*(\d{1,4})\s*", texto)
@@ -222,28 +225,37 @@ def _extraer_asistentes_contextuales(texto: str) -> int | None:
     return None
 
 
-# Ejecuta logica interna para extraer fecha.
-def _extraer_fecha(texto: str) -> str | None:
-    """Extrae fecha completa y la normaliza a formato ISO YYYY-MM-DD."""
+# GUARDRAIL DE FECHA: obtiene fecha completa y rechaza fechas imposibles antes de guardar estado.
+def _extraer_fecha_validada(texto: str) -> tuple[str | None, str | None]:
+    """Extrae fecha completa y devuelve error si el calendario no permite esa fecha."""
     iso = re.search(r"(20\d{2})[-/](\d{1,2})[-/](\d{1,2})", texto)
     if iso:
         anio, mes, dia = map(int, iso.groups())
-        return date(anio, mes, dia).isoformat()
+        return _fecha_iso_o_error(anio, mes, dia)
 
     numeric = re.search(r"(\d{1,2})[-/](\d{1,2})(?:[-/](20\d{2}))?", texto)
     if numeric:
         dia, mes, anio = numeric.groups()
-        return date(int(anio or 2026), int(mes), int(dia)).isoformat()
+        return _fecha_iso_o_error(int(anio or 2026), int(mes), int(dia))
 
     for nombre_mes, month_num in MONTHS.items():
         match = re.search(rf"(?:para\s+)?(?:el\s+)?(\d{{1,2}})\s*(?:de\s*)?{nombre_mes}(?:\s*(?:del?|de)?\s*(20\d{{2}}))?", texto)
         if match:
             dia, anio = match.groups()
-            return date(int(anio or 2026), month_num, int(dia)).isoformat()
-    return None
+            return _fecha_iso_o_error(int(anio or 2026), month_num, int(dia))
+    return None, None
 
 
-# Ejecuta logica interna para extraer fecha parcial.
+# GUARDRAIL DE FECHA: valida dia, mes y anio usando calendario real para evitar fechas alucinadas.
+def _fecha_iso_o_error(anio: int, mes: int, dia: int) -> tuple[str | None, str | None]:
+    """Convierte a ISO solo si la fecha existe en el calendario."""
+    try:
+        return date(anio, mes, dia).isoformat(), None
+    except ValueError:
+        return None, f"La fecha indicada no es valida: {dia:02d}/{mes:02d}/{anio}."
+
+
+# VALIDACION DE FECHA: guarda dia, mes o anio parcial cuando falta completar la fecha.
 def _extraer_fecha_parcial(texto: str) -> dict[str, int | None] | None:
     """Extrae dia, mes o anio incompleto cuando falta parte de la fecha."""
     partial: dict[str, int | None] = {"dia": None, "mes": None, "anio": None}
@@ -265,17 +277,72 @@ def _extraer_fecha_parcial(texto: str) -> dict[str, int | None] | None:
     return partial if any(value is not None for value in partial.values()) else None
 
 
-# Ejecuta logica interna para extraer distrito.
-def _extraer_distrito(message: str) -> str | None:
-    """Detecta distrito usando la lista de cobertura conocida."""
+# EXTRACCION REGLADA: obtiene distrito desde el mensaje, incluso si esta fuera de cobertura.
+def _extraer_distrito(message: str, esperando_distrito: bool = False) -> str | None:
+    """Detecta distrito conocido o distrito libre declarado por el usuario."""
     lowered = message.lower()
     for distrito in DISTRICTS:
         if distrito.lower() in lowered:
             return distrito
+    return _extraer_distrito_libre(message, esperando_distrito=esperando_distrito)
+
+
+# EXTRACCION REGLADA / COBERTURA: captura distritos no cubiertos para que luego la tool de cobertura los rechace claramente.
+def _extraer_distrito_libre(message: str, esperando_distrito: bool = False) -> str | None:
+    """Extrae un distrito fuera de la lista conocida cuando el usuario lo declara."""
+    texto = message.strip()
+    posicion_ultimo_en = texto.lower().rfind(" en ")
+    if posicion_ultimo_en >= 0:
+        candidato_en = _normalizar_distrito_libre(texto[posicion_ultimo_en + 4 :])
+        if candidato_en:
+            return candidato_en
+
+    if esperando_distrito:
+        candidato_suelto = _normalizar_distrito_libre(texto)
+        if candidato_suelto:
+            return candidato_suelto
+
+    patrones = [
+        r"\b(?:el\s+)?distrito\s+es\s+([a-zA-ZáéíóúÁÉÍÓÚñÑ\s]{3,50})\b",
+        r"\b([a-zA-ZáéíóúÁÉÍÓÚñÑ\s]{3,50})\s+es\s+el\s+distrito\b",
+    ]
+    for patron in patrones:
+        for match in re.finditer(patron, texto, flags=re.IGNORECASE):
+            candidato = _normalizar_distrito_libre(match.group(1))
+            if candidato:
+                return candidato
     return None
 
 
-# Ejecuta logica interna para extraer presupuesto.
+# VALIDACION DE DISTRITO: evita confundir meses, eventos o datos generales con nombres de distrito.
+def _normalizar_distrito_libre(value: str) -> str | None:
+    """Limpia y valida un distrito libre antes de guardarlo en memoria temporal."""
+    partes = re.split(r"\b(?:para|con|mi nombre|mi numero|mi número|telefono|teléfono|correo)\b", value, flags=re.IGNORECASE)
+    candidato = partes[-1] if len(partes) > 1 and " en " in value.lower() else partes[0]
+    candidato = re.split(r"\b(?:el|para el)\s+\d{1,2}\b|\b\d{1,2}\s+de\b", candidato, maxsplit=1, flags=re.IGNORECASE)[0]
+    candidato = re.sub(r"[^a-zA-ZáéíóúÁÉÍÓÚñÑ\s]", " ", candidato)
+    candidato = re.sub(r"\s+", " ", candidato).strip(" .,;:")
+    if len(candidato) < 3:
+        return None
+    candidato_lower = candidato.lower()
+    palabras = candidato_lower.split()
+    if any(mes in candidato_lower for mes in MONTHS):
+        return None
+    if any(alias in candidato_lower for aliases in EVENT_ALIASES.values() for alias in aliases):
+        return None
+    if any(palabra in {"personas", "persona", "asistentes", "cotizacion", "cotización", "evento"} for palabra in palabras):
+        return None
+    return candidato.title()
+
+
+# VALIDACION DE DISTRITO: detecta respuestas cortas que son solo el distrito pedido, para no tomarlas como nombre.
+def _mensaje_es_distrito_suelto(message: str, distrito: str) -> bool:
+    """Compara el mensaje normalizado con el distrito extraido."""
+    normalizado = _normalizar_distrito_libre(message)
+    return normalizado == distrito
+
+
+# EXTRACCION REGLADA: obtiene presupuesto declarado si existe.
 def _extraer_presupuesto(texto: str) -> float | None:
     """Extrae presupuesto si el usuario lo menciona explicitamente."""
     match = re.search(r"(?:presupuesto|hasta|s/|soles)\s*(\d{2,6})", texto)
@@ -284,7 +351,7 @@ def _extraer_presupuesto(texto: str) -> float | None:
     return None
 
 
-# Ejecuta logica interna para extraer preferencias.
+# EXTRACCION REGLADA: obtiene preferencias como economico, premium o tipos de bebida.
 def _extraer_preferencias(texto: str) -> list[str]:
     """Extrae preferencias comerciales sin tratarlas como productos."""
     preferencias = []
@@ -294,7 +361,7 @@ def _extraer_preferencias(texto: str) -> list[str]:
     return preferencias
 
 
-# Ejecuta logica interna para extraer productos solicitados.
+# EXTRACCION REGLADA: obtiene productos/servicios solicitados para validar contra catalogo.
 def _extraer_productos_solicitados(texto: str) -> list[str]:
     """Extrae productos o servicios concretos solicitados por el usuario."""
     product_aliases = {
@@ -314,7 +381,7 @@ def _extraer_productos_solicitados(texto: str) -> list[str]:
     return requested
 
 
-# Ejecuta logica interna para extraer cambios productos.
+# EXTRACCION REGLADA: detecta agregar, quitar o reemplazar productos en el pedido.
 def _extraer_cambios_productos(texto: str) -> dict[str, list[str]]:
     """Detecta acciones de agregar, quitar o reemplazar productos."""
     products = _extraer_productos_solicitados(texto)
@@ -335,7 +402,7 @@ def _extraer_cambios_productos(texto: str) -> dict[str, list[str]]:
     return {key: unique for key, values in changes.items() if (unique := list(dict.fromkeys(values)))}
 
 
-# Ejecuta logica interna para extraer productos no soportados.
+# VALIDACION DE CATALOGO: separa productos mencionados que no existen en el mock.
 def _extraer_productos_no_soportados(texto: str, productos_solicitados: list[str]) -> list[str]:
     """Identifica productos pedidos que no existen en el catalogo mock."""
     unsupported_aliases = {
@@ -354,7 +421,7 @@ def _extraer_productos_no_soportados(texto: str, productos_solicitados: list[str
     return unsupported
 
 
-# Ejecuta logica interna para extraer nombre cliente.
+# EXTRACCION REGLADA: obtiene nombre del cotizante cuando el usuario lo declara.
 def _extraer_nombre_cliente(message: str) -> str | None:
     """Extrae nombre del cotizante desde frases explicitas."""
     patterns = [
@@ -374,7 +441,7 @@ def _extraer_nombre_cliente(message: str) -> str | None:
     return None
 
 
-# Ejecuta logica interna para extraer nombre cliente contextual.
+# EXTRACCION REGLADA: infiere nombre solo desde frases contextuales claras.
 def _extraer_nombre_cliente_contextual(message: str) -> str | None:
     """Extrae un nombre cuando el flujo esta esperando solo el cotizante."""
     cleaned = message.strip(" .,:;")
@@ -391,7 +458,7 @@ def _extraer_nombre_cliente_contextual(message: str) -> str | None:
     return None
 
 
-# Ejecuta logica interna para extraer contacto.
+# EXTRACCION REGLADA: obtiene telefono o correo usado para seguimiento y memoria.
 def _extraer_contacto(message: str) -> str | None:
     """Extrae correo o telefono de contacto."""
     email = re.search(r"[\w\.-]+@[\w\.-]+\.\w+", message)
@@ -403,7 +470,7 @@ def _extraer_contacto(message: str) -> str | None:
     return None
 
 
-# Ejecuta logica interna para extraer nombre cerca contacto.
+# EXTRACCION REGLADA: busca nombre cercano al contacto para asociarlo al cotizante.
 def _extraer_nombre_cerca_contacto(message: str, contacto: str) -> str | None:
     """Busca un nombre cercano al telefono cuando no hubo frase directa."""
     prefix_name = _extraer_nombre_antes_frase_contacto(message)
@@ -422,7 +489,7 @@ def _extraer_nombre_cerca_contacto(message: str, contacto: str) -> str | None:
     return name.title() if len(name) >= 2 else None
 
 
-# Ejecuta logica interna para extraer nombre antes frase contacto.
+# EXTRACCION REGLADA: busca nombre antes de frases como mi numero es.
 def _extraer_nombre_antes_frase_contacto(message: str) -> str | None:
     """Obtiene posible nombre ubicado antes de una frase de contacto."""
     explicit_name = re.search(
@@ -457,7 +524,7 @@ def _extraer_nombre_antes_frase_contacto(message: str) -> str | None:
     return name.title() if len(name) >= 2 else None
 
 
-# Ejecuta logica interna para stopwords nombre.
+# VALIDACION DE IDENTIDAD: evita tomar palabras comunes como nombre del cotizante.
 def _stopwords_nombre() -> set[str]:
     """Lista palabras que no deben formar parte del nombre detectado."""
     return {
@@ -482,18 +549,18 @@ def _stopwords_nombre() -> set[str]:
     }
 
 
-# Ejecuta logica interna para extraer campos con agente.
+# AGENTE EXTRACTOR CREATE_AGENT: invoca LLM cuando las reglas no capturan suficiente informacion.
 def _extraer_campos_con_agente(message: str, estado: EstadoCotizacion) -> dict[str, Any]:
     """Invoca el extractor con create_agent si esta disponible."""
     try:
-        from app.agentic_extractor import extraer_campos_con_create_agent
+        from app.extractor_agentico import extraer_campos_con_create_agent
 
         return extraer_campos_con_create_agent(message, estado)
     except Exception:
         return {}
 
 
-# Ejecuta logica interna para fusionar campos agenticos.
+# VALIDACION ANTI-ALUCINACION: fusiona campos del LLM solo si no contradicen reglas y evidencia.
 def _fusionar_campos_agenticos(fields: dict[str, Any], agentic_fields: dict[str, Any]) -> dict[str, Any]:
     """Combina extraccion deterministica y agentica sin perder evidencias."""
     merged = dict(fields)

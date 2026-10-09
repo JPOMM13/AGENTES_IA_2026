@@ -4,10 +4,10 @@ import json
 from functools import lru_cache
 from typing import Literal
 
-from app.contracts import ContratoDisponibilidadHerramientas
+from app.contratos import ContratoDisponibilidadHerramientas
 from app.guardrails.decision import es_derivacion_humana_explicita, es_solicitud_nueva_cotizacion, es_solicitud_recuperar_memoria
-from app.guardrails.middleware import invocar_agente_con_guardrails, obtener_middleware_langchain_guardrails
-from app.llm_config import obtener_configuracion_llm
+from app.guardrails.capa_intermedia import invocar_agente_con_guardrails, obtener_middleware_langchain_guardrails
+from app.configuracion_llm import obtener_configuracion_llm
 from app.estado import EstadoCotizacion
 
 
@@ -25,13 +25,13 @@ DecisionAgente = Literal[
 ]
 
 
-# Ejecuta la responsabilidad de debe usar create agente.
+# CONFIGURACION AGENTICA: valida si el agente con create_agent debe activarse segun el .env.
 def debe_usar_create_agent() -> bool:
     """Indica si la capa agentica con create_agent esta habilitada."""
     return obtener_configuracion_llm().habilitado
 
 
-# Ejecuta la responsabilidad de decidir siguiente accion con agente.
+# AGENTE DECISOR CREATE_AGENT: interpreta la intencion del usuario y propone una accion, sin ejecutar negocio directamente.
 def decidir_siguiente_accion_con_agente(mensaje_usuario: str, estado: EstadoCotizacion) -> DecisionAgente | None:
     """Optional LangChain create_agent ReAct layer.
 
@@ -72,20 +72,20 @@ def decidir_siguiente_accion_con_agente(mensaje_usuario: str, estado: EstadoCoti
         return None
 
 
-# Ejecuta la responsabilidad de obtener agente decisor.
+# CACHE AGENTICO: reutiliza el agente decisor para no recrearlo en cada interaccion.
 @lru_cache(maxsize=1)
 def obtener_agente_decisor():
     """Devuelve el agente decisor cacheado para no recrearlo por mensaje."""
     return crear_agente_decisor()
 
 
-# Ejecuta la responsabilidad de crear agente decisor.
+# AGENTE DECISOR CREATE_AGENT: construye el agente con su system prompt, tool de decision y middleware guardrail.
 def crear_agente_decisor():
     """Crea el agente decisor con create_agent usando el LLM configurado."""
     from langchain.agents import create_agent
     from langchain.tools import tool
 
-    # Ejecuta la responsabilidad de elegir accion workflow.
+    # TOOL DEL AGENTE DECISOR: devuelve una accion permitida segun prerequisitos, evitando que el LLM salte validaciones.
     @tool
     def elegir_accion_workflow(
         mensaje_usuario: str,
@@ -174,7 +174,7 @@ FORMATO DE SALIDA:
     return agente
 
 
-# Ejecuta la responsabilidad de normalizar decision.
+# VALIDACION DE SALIDA AGENTICA: convierte texto o tool output del LLM en una accion interna permitida.
 def normalizar_decision(content: str) -> DecisionAgente | None:
     """Extrae una accion valida desde texto o salida de tool."""
     allowed: set[str] = {
@@ -196,7 +196,7 @@ def normalizar_decision(content: str) -> DecisionAgente | None:
     return None
 
 
-# Ejecuta la responsabilidad de extraer decision de mensajes.
+# VALIDACION DE SALIDA AGENTICA: prioriza la salida de tool sobre texto libre para reducir alucinaciones.
 def extraer_decision_de_mensajes(mensajes: list) -> DecisionAgente | None:
     """Obtiene la decision final priorizando salidas estructuradas."""
     # Prefer tool outputs over final LLM prose. The final prose may hallucinate
@@ -209,7 +209,7 @@ def extraer_decision_de_mensajes(mensajes: list) -> DecisionAgente | None:
     return None
 
 
-# Ejecuta la responsabilidad de obtener disponibilidad tools.
+# CONTRATO DE TOOLS / VALIDACION PREVIA: informa al agente que herramientas puede pedir segun datos ya capturados.
 def obtener_disponibilidad_tools(mensaje_usuario: str, estado: EstadoCotizacion) -> dict[str, bool]:
     """Calcula prerequisitos para que el agente sepa que tools puede usar."""
     texto = mensaje_usuario.lower()
@@ -237,7 +237,7 @@ def obtener_disponibilidad_tools(mensaje_usuario: str, estado: EstadoCotizacion)
     ).a_diccionario()
 
 
-# Ejecuta la responsabilidad de es solicitud derivacion explicita.
+# VALIDACION DE DERIVACION HUMANA: confirma que la derivacion fue solicitada explicitamente por el usuario.
 def es_solicitud_derivacion_explicita(message: str) -> bool:
     """Detecta si el usuario pidio de forma explicita derivacion humana."""
     return es_derivacion_humana_explicita(message.lower())

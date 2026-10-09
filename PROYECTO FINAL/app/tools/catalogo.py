@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from app.data.mock_data import CATALOG, PRODUCTS
+from app.data.datos_mock import CATALOG, PRODUCTS
 from app.estado import EstadoCotizacion
 
 
-# Ejecuta la responsabilidad de mock buscar catalogo.
+# TOOL MOCK/CATALOGO: consulta paquetes, productos y servicios simulados disponibles para cotizar.
 def mock_buscar_catalogo(estado: EstadoCotizacion) -> dict:
     """Filtra paquetes y productos mock segun evento, capacidad y pedido."""
     # MOCK: ESTA TOOL DEBERIA CONSULTAR EL CATALOGO COMERCIAL REAL EN POSTGRESQL O EN EL API/SISTEMA DE CATALOGO DE PRODUCTOS Y SERVICIOS.
@@ -41,7 +41,7 @@ def mock_buscar_catalogo(estado: EstadoCotizacion) -> dict:
     }
 
 
-# Ejecuta logica interna para cliente solicito paquete o servicio.
+# VALIDACION DE CATALOGO: detecta si el usuario pidio paquete/servicio o productos especificos.
 def _cliente_solicito_paquete_o_servicio(estado: EstadoCotizacion) -> bool:
     """Detecta si el usuario pidio un servicio/paquete y no solo productos."""
     return any(product in {"bar movil", "bartenders"} for product in estado.productos_solicitados)

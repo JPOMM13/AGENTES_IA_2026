@@ -2,11 +2,11 @@ from __future__ import annotations
 
 from urllib.parse import quote as codificar_url
 
-from app.data.mock_data import WHATSAPP_NUMBER
+from app.data.datos_mock import WHATSAPP_NUMBER
 from app.estado import EstadoCotizacion
 
 
-# Ejecuta la responsabilidad de mock derivar whatsapp.
+# TOOL MOCK/DERIVACION HUMANA: prepara enlace WhatsApp solo cuando el usuario solicita humano.
 def mock_derivar_whatsapp(estado: EstadoCotizacion, reason: str) -> dict:
     """Prepara una derivacion mock por WhatsApp con resumen del caso."""
     # MOCK: ESTA TOOL DEBERIA CREAR LA DERIVACION EN CRM/TICKETING Y ENVIAR O PREPARAR EL MENSAJE POR WHATSAPP BUSINESS API.

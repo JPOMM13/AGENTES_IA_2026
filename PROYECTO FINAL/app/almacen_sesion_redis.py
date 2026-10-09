@@ -11,7 +11,7 @@ from app.estado import EstadoCotizacion
 REDIS_MOCK_PATH = Path(__file__).resolve().parent / "data" / "mock_redis_session.json"
 
 
-# Ejecuta la responsabilidad de guardar sesion activa.
+# MEMORIA CORTA MOCK REDIS: guarda el estado vivo de la sesion actual en JSON local.
 def guardar_sesion_activa(estado: EstadoCotizacion) -> None:
     """Guarda la memoria corta activa usando id_sesion como clave."""
     # MOCK: PARA ESTA POC LOCAL SE GUARDA SOLO LA ULTIMA SESION ACTIVA; EN REDIS REAL HABRIA UNA KEY POR SESSION_ID CON TTL.
@@ -21,7 +21,7 @@ def guardar_sesion_activa(estado: EstadoCotizacion) -> None:
     _escribir_almacen(store)
 
 
-# Ejecuta la responsabilidad de cargar sesion activa.
+# MEMORIA CORTA MOCK REDIS: recupera el estado vivo de la sesion por id_sesion.
 def cargar_sesion_activa(id_sesion: str) -> EstadoCotizacion | None:
     """Recupera la memoria corta activa asociada al id_sesion."""
     # MOCK: AQUI SE CONSULTARIA REDIS POR SESSION_ID PARA REHIDRATAR EL CONTEXTO VIVO DE LA CONVERSACION.
@@ -31,7 +31,7 @@ def cargar_sesion_activa(id_sesion: str) -> EstadoCotizacion | None:
     return EstadoCotizacion.desde_diccionario_persistido(record)
 
 
-# Ejecuta la responsabilidad de reiniciar sesion activa.
+# MEMORIA CORTA MOCK REDIS: elimina la sesion activa cuando se reinicia la conversacion.
 def reiniciar_sesion_activa(id_sesion: str) -> None:
     """Elimina la memoria corta activa de una sesion."""
     # MOCK: AQUI SE ELIMINARIA LA CLAVE SESSION_ID EN REDIS AL REINICIAR LA CONVERSACION.
@@ -41,7 +41,7 @@ def reiniciar_sesion_activa(id_sesion: str) -> None:
         _escribir_almacen(store)
 
 
-# Ejecuta logica interna para leer almacen.
+# MEMORIA CORTA MOCK REDIS: lee el JSON local que simula Redis.
 def _leer_almacen() -> dict[str, Any]:
     """Lee el archivo local que simula Redis."""
     if not REDIS_MOCK_PATH.exists():
@@ -52,7 +52,7 @@ def _leer_almacen() -> dict[str, Any]:
         return {}
 
 
-# Ejecuta logica interna para escribir almacen.
+# MEMORIA CORTA MOCK REDIS: escribe el JSON local que simula Redis.
 def _escribir_almacen(store: dict[str, Any]) -> None:
     """Persiste el mock local de Redis."""
     REDIS_MOCK_PATH.write_text(json.dumps(store, ensure_ascii=False, indent=2), encoding="utf-8")

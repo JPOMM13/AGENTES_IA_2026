@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from app.data.mock_data import COVERED_DISTRICTS
+from app.data.datos_mock import COVERED_DISTRICTS
 from app.estado import EstadoCotizacion
 
 
-# Ejecuta la responsabilidad de mock validar cobertura.
+# TOOL MOCK/COBERTURA: valida si el distrito esta dentro de la cobertura operativa simulada.
 def mock_validar_cobertura(estado: EstadoCotizacion) -> dict:
     """Confirma si el distrito esta dentro de la cobertura mock."""
     # MOCK: ESTA TOOL DEBERIA CONSULTAR COBERTURA OPERATIVA REAL EN UN API/SISTEMA DE ZONAS, DISTRITOS Y CAPACIDAD LOGISTICA.
@@ -13,5 +13,6 @@ def mock_validar_cobertura(estado: EstadoCotizacion) -> dict:
     return {
         "ok": ok,
         "distrito": estado.distrito,
-        "reason": None if ok else f"No hay cobertura mock confirmada para {estado.distrito}.",
+        "distritos_cubiertos": sorted(COVERED_DISTRICTS),
+        "reason": None if ok else f"{estado.distrito} no esta dentro del alcance de cobertura mock.",
     }

@@ -12,7 +12,7 @@ class ResultadoGuardrailEntrada:
     respuesta_segura: str = ""
 
 
-# Ejecuta la responsabilidad de validar mensaje entrada.
+# GUARDRAIL DE ENTRADA: valida el mensaje antes de enviarlo al workflow, LLM o tools.
 def validar_mensaje_entrada(mensaje: str) -> ResultadoGuardrailEntrada:
     """Valida el mensaje del usuario antes de enviarlo al workflow o create_agent."""
     texto = mensaje.strip()
@@ -31,7 +31,7 @@ def validar_mensaje_entrada(mensaje: str) -> ResultadoGuardrailEntrada:
     return ResultadoGuardrailEntrada(permitido=True, motivo="entrada valida")
 
 
-# Ejecuta la responsabilidad de contiene intento de romper reglas.
+# GUARDRAIL DE ENTRADA: detecta intentos de prompt injection o ruptura de reglas.
 def contiene_intento_de_romper_reglas(mensaje: str) -> bool:
     """Detecta instrucciones tipicas de prompt injection para bloquearlas."""
     texto = mensaje.lower()
