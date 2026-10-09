@@ -1,32 +1,32 @@
 from __future__ import annotations
 
-from urllib.parse import quote
+from urllib.parse import quote as codificar_url
 
 from app.data.mock_data import WHATSAPP_NUMBER
-from app.state import QuoteState
+from app.estado import EstadoCotizacion
 
 
 # Ejecuta la responsabilidad de mock derivar whatsapp.
-def mock_derivar_whatsapp(state: QuoteState, reason: str) -> dict:
+def mock_derivar_whatsapp(estado: EstadoCotizacion, reason: str) -> dict:
     """Prepara una derivacion mock por WhatsApp con resumen del caso."""
     # MOCK: ESTA TOOL DEBERIA CREAR LA DERIVACION EN CRM/TICKETING Y ENVIAR O PREPARAR EL MENSAJE POR WHATSAPP BUSINESS API.
     summary = {
-        "intent": state.intent,
+        "intencion": estado.intencion,
         "captured_data": {
-            "event_type": state.event_type,
-            "attendees": state.attendees,
-            "event_date": state.event_date,
-            "district": state.district,
-            "budget": state.budget,
+            "tipo_evento": estado.tipo_evento,
+            "asistentes": estado.asistentes,
+            "fecha_evento": estado.fecha_evento,
+            "distrito": estado.distrito,
+            "presupuesto": estado.presupuesto,
         },
-        "recommended_option": state.recommended_option["name"] if state.recommended_option else None,
-        "quote_total": state.quote["total"] if state.quote else None,
+        "opcion_recomendada": estado.opcion_recomendada["name"] if estado.opcion_recomendada else None,
+        "quote_total": estado.cotizacion["total"] if estado.cotizacion else None,
         "reason": reason,
     }
-    text = quote(f"Hola, necesito ayuda con mi cotizacion POC. Resumen: {summary}")
+    texto = codificar_url(f"Hola, necesito ayuda con mi cotizacion POC. Resumen: {summary}")
     return {
         "handoff_id": "H-POC-0001",
         "channel": "whatsapp",
-        "url": f"https://wa.me/{WHATSAPP_NUMBER}?text={text}",
+        "url": f"https://wa.me/{WHATSAPP_NUMBER}?texto={texto}",
         "summary": summary,
     }

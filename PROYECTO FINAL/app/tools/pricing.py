@@ -2,20 +2,20 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 
-from app.state import QuoteState
+from app.estado import EstadoCotizacion
 
 
 # Ejecuta la responsabilidad de mock comparar opciones.
-def mock_comparar_opciones(state: QuoteState) -> dict:
+def mock_comparar_opciones(estado: EstadoCotizacion) -> dict:
     """Ordena opciones disponibles con un scoring simple de afinidad."""
     # MOCK: ESTA TOOL DEBERIA USAR REGLAS REALES DE RECOMENDACION, SCORING COMERCIAL O UN SERVICIO DE OPTIMIZACION DE PAQUETES.
     ranked = []
-    for option in state.valid_options:
-        affinity = option.get("event_affinity", {}).get(state.event_type or "", 0.5)
-        capacity_fit = _ajuste_capacidad(option, state.attendees or 0)
+    for option in estado.opciones_validas:
+        affinity = option.get("event_affinity", {}).get(estado.tipo_evento or "", 0.5)
+        capacity_fit = _ajuste_capacidad(option, estado.asistentes or 0)
         availability = 1.0 if option.get("available_slots", 0) > 0 else 0.0
-        budget_fit = _ajuste_presupuesto(option, state.budget)
-        preference_fit = _ajuste_preferencia(option, state.preferences)
+        budget_fit = _ajuste_presupuesto(option, estado.presupuesto)
+        preference_fit = _ajuste_preferencia(option, estado.preferencias)
         score = (
             affinity * 0.35
             + capacity_fit * 0.25
@@ -26,7 +26,7 @@ def mock_comparar_opciones(state: QuoteState) -> dict:
         enriched = option.copy()
         enriched["score"] = round(score, 3)
         enriched["reasons"] = [
-            f"Afinidad alta con {state.event_type}.",
+            f"Afinidad alta con {estado.tipo_evento}.",
             f"Capacidad sugerida: {option['capacity_min']} a {option['capacity_max']} personas.",
             "Disponibilidad mock confirmada para la fecha.",
         ]
@@ -37,19 +37,19 @@ def mock_comparar_opciones(state: QuoteState) -> dict:
 
 
 # Ejecuta la responsabilidad de mock generar cotizacion.
-def mock_generar_cotizacion(state: QuoteState) -> dict:
+def mock_generar_cotizacion(estado: EstadoCotizacion) -> dict:
     """Genera una cotizacion mock desde el paquete o productos recomendados."""
     # MOCK: ESTA TOOL DEBERIA GENERAR LA COTIZACION EN EL SISTEMA TRANSACCIONAL REAL, PERSISTIRLA EN POSTGRESQL Y DEVOLVER ID, TOTALES E IMPUESTOS OFICIALES.
-    if not state.recommended_option:
+    if not estado.opcion_recomendada:
         raise ValueError("No existe opcion recomendada para cotizar.")
-    if state.recommended_option.get("source") == "products":
-        subtotal = round(sum(item["subtotal"] for item in state.recommended_option["items"]), 2)
-        details = state.recommended_option["items"]
+    if estado.opcion_recomendada.get("origen") == "products":
+        subtotal = round(sum(item["subtotal"] for item in estado.opcion_recomendada["items"]), 2)
+        details = estado.opcion_recomendada["items"]
     else:
-        subtotal = float(state.recommended_option["base_price"])
+        subtotal = float(estado.opcion_recomendada["base_price"])
         details = [
             {
-                "concept": state.recommended_option["name"],
+                "concept": estado.opcion_recomendada["name"],
                 "quantity": 1,
                 "unit": "paquete",
                 "unit_price": subtotal,
@@ -61,7 +61,7 @@ def mock_generar_cotizacion(state: QuoteState) -> dict:
     valid_until = (datetime.now() + timedelta(hours=48)).replace(microsecond=0).isoformat()
     return {
         "quote_id": "Q-POC-0001",
-        "currency": state.recommended_option.get("currency", "PEN"),
+        "currency": estado.opcion_recomendada.get("currency", "PEN"),
         "subtotal": subtotal,
         "taxes": taxes,
         "total": total,
@@ -76,28 +76,28 @@ def mock_generar_cotizacion(state: QuoteState) -> dict:
 
 
 # Ejecuta logica interna para ajuste capacidad.
-def _ajuste_capacidad(option: dict, attendees: int) -> float:
+def _ajuste_capacidad(option: dict, asistentes: int) -> float:
     """Calcula que tan bien calza la capacidad del paquete."""
-    if option["capacity_min"] <= attendees <= option["capacity_max"]:
+    if option["capacity_min"] <= asistentes <= option["capacity_max"]:
         return 1.0
-    if attendees < option["capacity_min"]:
-        return max(0.3, 1 - ((option["capacity_min"] - attendees) / option["capacity_min"]))
+    if asistentes < option["capacity_min"]:
+        return max(0.3, 1 - ((option["capacity_min"] - asistentes) / option["capacity_min"]))
     return 0.0
 
 
 # Ejecuta logica interna para ajuste presupuesto.
-def _ajuste_presupuesto(option: dict, budget: float | None) -> float:
+def _ajuste_presupuesto(option: dict, presupuesto: float | None) -> float:
     """Evalua si el precio base entra en el presupuesto declarado."""
-    if not budget:
+    if not presupuesto:
         return 0.75
-    return 1.0 if option["base_price"] <= budget else max(0.0, 1 - ((option["base_price"] - budget) / option["base_price"]))
+    return 1.0 if option["base_price"] <= presupuesto else max(0.0, 1 - ((option["base_price"] - presupuesto) / option["base_price"]))
 
 
 # Ejecuta logica interna para ajuste preferencia.
-def _ajuste_preferencia(option: dict, preferences: list[str]) -> float:
+def _ajuste_preferencia(option: dict, preferencias: list[str]) -> float:
     """Mide coincidencia simple entre preferencias y texto del paquete."""
-    text = " ".join([option["name"], *option.get("includes", [])]).lower()
-    if not preferences:
+    texto = " ".join([option["name"], *option.get("includes", [])]).lower()
+    if not preferencias:
         return 0.7
-    matches = sum(1 for preference in preferences if preference.lower() in text)
-    return min(1.0, matches / max(1, len(preferences)))
+    matches = sum(1 for preference in preferencias if preference.lower() in texto)
+    return min(1.0, matches / max(1, len(preferencias)))

@@ -6,69 +6,69 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from app.state import QuoteState
+from app.estado import EstadoCotizacion
 
 
 STORE_PATH = Path(__file__).resolve().parent / "data" / "mock_session_memory.json"
 
 
 # Ejecuta la responsabilidad de guardar estado conversacion.
-def guardar_estado_conversacion(state: QuoteState) -> None:
+def guardar_estado_conversacion(estado: EstadoCotizacion) -> None:
     """Guarda el estado si ya existe una identidad minima del cotizante."""
     # MOCK: ESTA MEMORIA ENTRE SESIONES DEBERIA GUARDARSE EN POSTGRESQL/NOSQL USANDO CONTACT COMO IDENTIFICADOR PRINCIPAL.
-    if not state.contact:
+    if not estado.contacto:
         return
-    if not _tiene_datos_para_memoria_persistente(state):
+    if not _tiene_datos_para_memoria_persistente(estado):
         return
 
     store = _leer_almacen()
-    record = state.a_diccionario_persistido()
+    record = estado.a_diccionario_persistido()
     record["updated_at"] = datetime.now(UTC).isoformat(timespec="seconds")
-    store[_clave_contacto(state.contact)] = record
+    store[_clave_contacto(estado.contacto)] = record
     _escribir_almacen(store)
 
 
 # Ejecuta la responsabilidad de buscar conversacion previa.
-def buscar_conversacion_previa(customer_name: str | None, contact: str | None) -> QuoteState | None:
+def buscar_conversacion_previa(nombre_cliente: str | None, contacto: str | None) -> EstadoCotizacion | None:
     """Busca una conversacion anterior usando contacto como identidad principal."""
     # MOCK: ESTA CONSULTA DEBERIA IR A POSTGRESQL O NOSQL BUSCANDO POR TELEFONO/CORREO, NO POR NOMBRE.
-    if not contact:
+    if not contacto:
         return None
-    record = _leer_almacen().get(_clave_contacto(contact))
+    record = _leer_almacen().get(_clave_contacto(contacto))
     if not record:
         return None
-    return QuoteState.desde_diccionario_persistido(record)
+    return EstadoCotizacion.desde_diccionario_persistido(record)
 
 
 # Ejecuta la responsabilidad de hidratar estado.
-def hidratar_estado(target: QuoteState, source: QuoteState) -> QuoteState:
+def hidratar_estado(destino: EstadoCotizacion, origen: EstadoCotizacion) -> EstadoCotizacion:
     """Carga una conversacion previa dentro de la nueva sesion actual."""
-    current_session_id = target.session_id
-    restored = source.a_diccionario_persistido()
-    restored["session_id"] = current_session_id
-    restored["messages"] = target.messages
-    restored["logs"] = target.logs + source.logs[-20:]
-    return QuoteState.desde_diccionario_persistido(restored)
+    current_session_id = destino.id_sesion
+    restored = origen.a_diccionario_persistido()
+    restored["id_sesion"] = current_session_id
+    restored["mensajes"] = destino.mensajes
+    restored["trazas"] = destino.trazas + origen.trazas[-20:]
+    return EstadoCotizacion.desde_diccionario_persistido(restored)
 
 
 # Ejecuta logica interna para clave contacto.
-def _clave_contacto(contact: str) -> str:
+def _clave_contacto(contacto: str) -> str:
     """Normaliza telefono o correo para identificar al cliente."""
-    return re.sub(r"\D+", "", contact.lower()) or contact.strip().lower()
+    return re.sub(r"\D+", "", contacto.lower()) or contacto.strip().lower()
 
 
 # Ejecuta logica interna para tiene datos para memoria persistente.
-def _tiene_datos_para_memoria_persistente(state: QuoteState) -> bool:
+def _tiene_datos_para_memoria_persistente(estado: EstadoCotizacion) -> bool:
     """Evita guardar busquedas vacias como si fueran cotizaciones previas."""
     return any(
         [
-            state.event_type,
-            state.attendees,
-            state.event_date,
-            state.district,
-            state.requested_products,
-            state.recommended_option,
-            state.quote,
+            estado.tipo_evento,
+            estado.asistentes,
+            estado.fecha_evento,
+            estado.distrito,
+            estado.productos_solicitados,
+            estado.opcion_recomendada,
+            estado.cotizacion,
         ]
     )
 

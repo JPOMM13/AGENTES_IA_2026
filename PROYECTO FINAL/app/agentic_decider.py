@@ -4,59 +4,59 @@ import json
 from functools import lru_cache
 from typing import Literal
 
-from app.contracts import ToolReadinessContract
+from app.contracts import ContratoDisponibilidadHerramientas
 from app.guardrails.decision import es_derivacion_humana_explicita, es_solicitud_nueva_cotizacion, es_solicitud_recuperar_memoria
 from app.guardrails.middleware import invocar_agente_con_guardrails, obtener_middleware_langchain_guardrails
 from app.llm_config import obtener_configuracion_llm
-from app.state import QuoteState
+from app.estado import EstadoCotizacion
 
 
-AgentDecision = Literal[
+DecisionAgente = Literal[
     "pedir_campos_faltantes",
-    "answer_price",
-    "validate_and_recommend",
-    "generate_quote",
-    "show_image",
-    "handoff",
-    "answer_policy",
-    "close",
-    "resume_previous",
-    "new_quote",
+    "responder_precio",
+    "validar_y_recomendar",
+    "generar_cotizacion",
+    "mostrar_imagen",
+    "derivacion",
+    "responder_politica",
+    "cierre",
+    "retomar_previa",
+    "nueva_cotizacion",
 ]
 
 
-# Ejecuta la responsabilidad de debe usar create agent.
+# Ejecuta la responsabilidad de debe usar create agente.
 def debe_usar_create_agent() -> bool:
     """Indica si la capa agentica con create_agent esta habilitada."""
-    return obtener_configuracion_llm().enabled
+    return obtener_configuracion_llm().habilitado
 
 
 # Ejecuta la responsabilidad de decidir siguiente accion con agente.
-def decidir_siguiente_accion_con_agente(user_message: str, state: QuoteState) -> AgentDecision | None:
+def decidir_siguiente_accion_con_agente(mensaje_usuario: str, estado: EstadoCotizacion) -> DecisionAgente | None:
     """Optional LangChain create_agent ReAct layer.
 
-    The agent decides the next high-level action. The workflow still executes
+    The agente decides the next high-level accion. The workflow still executes
     deterministic tools and guardrails after this decision.
     """
     if not debe_usar_create_agent():
         return None
     try:
-        readiness = obtener_disponibilidad_tools(user_message, state)
-        agent = obtener_agente_decisor()
+        disponibilidad = obtener_disponibilidad_tools(mensaje_usuario, estado)
+        agente = obtener_agente_decisor()
         carga_agente = (
             {
                 "messages": [
                     {
                         "role": "user",
-                        "content": json.dumps(
+        "content": json.dumps(
                             {
-                                "user_message": user_message,
-                                "state": state.a_diccionario_panel(),
-                                "missing_fields": state.missing_fields,
-                                "tool_readiness": readiness,
-                                "explicit_handoff_requested": es_solicitud_derivacion_explicita(user_message),
-                                "explicit_resume_requested": es_solicitud_recuperar_memoria(user_message.lower()),
-                                "explicit_new_quote_requested": es_solicitud_nueva_cotizacion(user_message.lower()),
+                                "mensaje_usuario": mensaje_usuario,
+                                "estado": estado.a_diccionario_panel(),
+                                "campos_faltantes": estado.campos_faltantes,
+                                "disponibilidad_herramientas": disponibilidad,
+                                "explicit_handoff_requested": es_solicitud_derivacion_explicita(mensaje_usuario),
+                                "explicit_resume_requested": es_solicitud_recuperar_memoria(mensaje_usuario.lower()),
+                                "explicit_new_quote_requested": es_solicitud_nueva_cotizacion(mensaje_usuario.lower()),
                             },
                             ensure_ascii=False,
                         ),
@@ -64,10 +64,10 @@ def decidir_siguiente_accion_con_agente(user_message: str, state: QuoteState) ->
                 ]
             }
         )
-        result = invocar_agente_con_guardrails(agent, carga_agente, user_message, state, "agente_decisor")
-        if not result:
+        resultado = invocar_agente_con_guardrails(agente, carga_agente, mensaje_usuario, estado, "agente_decisor")
+        if not resultado:
             return None
-        return extraer_decision_de_mensajes(result["messages"])
+        return extraer_decision_de_mensajes(resultado["messages"])
     except Exception:
         return None
 
@@ -88,43 +88,43 @@ def crear_agente_decisor():
     # Ejecuta la responsabilidad de elegir accion workflow.
     @tool
     def elegir_accion_workflow(
-        user_message: str,
-        has_missing_fields: bool,
-        has_recommendation: bool,
-        has_quote: bool,
-        can_answer_price: bool,
-        can_validate_and_recommend: bool,
-        can_generate_quote: bool,
-        can_show_image: bool,
+        mensaje_usuario: str,
+        tiene_campos_faltantes: bool,
+        tiene_recomendacion: bool,
+        tiene_cotizacion: bool,
+        puede_responder_precio: bool,
+        puede_validar_y_recomendar: bool,
+        puede_generar_cotizacion: bool,
+        puede_mostrar_imagen: bool,
         explicit_handoff_requested: bool = False,
         explicit_resume_requested: bool = False,
         explicit_new_quote_requested: bool = False,
     ) -> str:
         """Elige accion respetando prerequisitos minimos antes de usar tools."""
-        text = user_message.lower()
+        texto = mensaje_usuario.lower()
         if explicit_new_quote_requested:
-            return "new_quote"
+            return "nueva_cotizacion"
         if explicit_resume_requested:
-            return "resume_previous"
-        if any(term in text for term in ["imagen", "foto", "visual"]):
-            return "show_image" if can_show_image else "pedir_campos_faltantes"
+            return "retomar_previa"
+        if any(term in texto for term in ["imagen", "foto", "visual"]):
+            return "mostrar_imagen" if puede_mostrar_imagen else "pedir_campos_faltantes"
         if explicit_handoff_requested:
-            return "handoff"
-        if any(term in text for term in ["politica", "feriado", "anticipacion", "anticipación"]):
-            return "answer_policy"
-        if any(term in text for term in ["cerrar", "finalizar", "terminar"]):
-            return "close"
-        if any(term in text for term in ["genera la cotizacion", "genera la cotización", "cotizalo", "cotízalo"]):
-            return "generate_quote" if can_generate_quote else "pedir_campos_faltantes"
-        if any(term in text for term in ["cuanto cuesta", "cuánto cuesta", "precio", "costo"]):
-            return "answer_price" if can_answer_price else "pedir_campos_faltantes"
-        if has_missing_fields:
+            return "derivacion"
+        if any(term in texto for term in ["politica", "feriado", "anticipacion", "anticipación"]):
+            return "responder_politica"
+        if any(term in texto for term in ["cerrar", "finalizar", "terminar"]):
+            return "cierre"
+        if any(term in texto for term in ["genera la cotizacion", "genera la cotización", "cotizalo", "cotízalo"]):
+            return "generar_cotizacion" if puede_generar_cotizacion else "pedir_campos_faltantes"
+        if any(term in texto for term in ["cuanto cuesta", "cuánto cuesta", "precio", "costo"]):
+            return "responder_precio" if puede_responder_precio else "pedir_campos_faltantes"
+        if tiene_campos_faltantes:
             return "pedir_campos_faltantes"
-        if not has_recommendation and can_validate_and_recommend:
-            return "validate_and_recommend"
-        if has_quote:
-            return "close"
-        return "validate_and_recommend" if can_validate_and_recommend else "pedir_campos_faltantes"
+        if not tiene_recomendacion and puede_validar_y_recomendar:
+            return "validar_y_recomendar"
+        if tiene_cotizacion:
+            return "cierre"
+        return "validar_y_recomendar" if puede_validar_y_recomendar else "pedir_campos_faltantes"
 
     system_prompt = """
 Eres el modulo decisor de un workflow agentico de cotizaciones de eventos.
@@ -132,31 +132,31 @@ Tu tarea NO es cotizar, NO es inventar datos y NO es responder comercialmente.
 Solo debes elegir una accion de alto nivel.
 
 CONTEXTO:
-- Recibiras user_message, state, missing_fields, tool_readiness,
+- Recibiras mensaje_usuario, estado, campos_faltantes, disponibilidad_herramientas,
   explicit_handoff_requested, explicit_resume_requested y
   explicit_new_quote_requested.
-- state es memoria operativa de la cotizacion en curso.
-- tool_readiness indica si ya existen prerequisitos para usar herramientas de
+- estado es memoria operativa de la cotizacion en curso.
+- disponibilidad_herramientas indica si ya existen prerequisitos para usar herramientas de
   negocio.
 
 REGLAS IMPORTANTES:
 - Usa la tool elegir_accion_workflow.
 - Devuelve exactamente una de estas acciones: pedir_campos_faltantes,
-  answer_price, validate_and_recommend, generate_quote, show_image, handoff,
-  answer_policy, close, resume_previous, new_quote.
+  responder_precio, validar_y_recomendar, generar_cotizacion, mostrar_imagen, derivacion,
+  responder_politica, cierre, retomar_previa, nueva_cotizacion.
 - Si el usuario indica que quiere otra/nueva cotizacion, otro numero, otro
-  contacto u otra persona, elige new_quote.
+  contacto u otra persona, elige nueva_cotizacion.
 - Si el usuario indica que ya tuvo una sesion/conversacion anterior, que ya
   conversaron, que ya dio/dejo todos sus datos, que ya dio datos antes aunque
   escriba con errores como "enteriormente", o que quiere continuar lo anterior,
-  elige resume_previous aunque no entregue telefono todavia.
-- validate_and_recommend solo si can_validate_and_recommend=true.
-- generate_quote solo si can_generate_quote=true.
-- answer_price solo si can_answer_price=true.
-- show_image solo si can_show_image=true.
+  elige retomar_previa aunque no entregue telefono todavia.
+- validar_y_recomendar solo si puede_validar_y_recomendar=true.
+- generar_cotizacion solo si puede_generar_cotizacion=true.
+- responder_precio solo si puede_responder_precio=true.
+- mostrar_imagen solo si puede_mostrar_imagen=true.
 - handoff solo si explicit_handoff_requested=true.
 - Si faltan datos minimos, elige pedir_campos_faltantes.
-- Si el usuario solo revisa o modifica datos, no elijas generate_quote.
+- Si el usuario solo revisa o modifica datos, no elijas generar_cotizacion.
 - No asumas productos, fechas, cantidades ni intenciones no dichas.
 
 FORMATO DE SALIDA:
@@ -175,33 +175,33 @@ FORMATO DE SALIDA:
 
 
 # Ejecuta la responsabilidad de normalizar decision.
-def normalizar_decision(content: str) -> AgentDecision | None:
+def normalizar_decision(content: str) -> DecisionAgente | None:
     """Extrae una accion valida desde texto o salida de tool."""
     allowed: set[str] = {
         "pedir_campos_faltantes",
-        "answer_price",
-        "validate_and_recommend",
-        "generate_quote",
-        "show_image",
-        "handoff",
-        "answer_policy",
-        "close",
-        "resume_previous",
-        "new_quote",
+        "responder_precio",
+        "validar_y_recomendar",
+        "generar_cotizacion",
+        "mostrar_imagen",
+        "derivacion",
+        "responder_politica",
+        "cierre",
+        "retomar_previa",
+        "nueva_cotizacion",
     }
-    text = content.strip().lower()
-    for action in allowed:
-        if action in text:
-            return action  # type: ignore[return-value]
+    texto = content.strip().lower()
+    for accion in allowed:
+        if accion in texto:
+            return accion  # type: ignore[return-value]
     return None
 
 
 # Ejecuta la responsabilidad de extraer decision de mensajes.
-def extraer_decision_de_mensajes(messages: list) -> AgentDecision | None:
+def extraer_decision_de_mensajes(mensajes: list) -> DecisionAgente | None:
     """Obtiene la decision final priorizando salidas estructuradas."""
     # Prefer tool outputs over final LLM prose. The final prose may hallucinate
-    # business facts; the tool output is the constrained action contract.
-    for message in reversed(messages):
+    # business facts; the tool output is the constrained accion contract.
+    for message in reversed(mensajes):
         content = getattr(message, "content", "")
         decision = normalizar_decision(str(content))
         if decision:
@@ -210,11 +210,11 @@ def extraer_decision_de_mensajes(messages: list) -> AgentDecision | None:
 
 
 # Ejecuta la responsabilidad de obtener disponibilidad tools.
-def obtener_disponibilidad_tools(user_message: str, state: QuoteState) -> dict[str, bool]:
+def obtener_disponibilidad_tools(mensaje_usuario: str, estado: EstadoCotizacion) -> dict[str, bool]:
     """Calcula prerequisitos para que el agente sepa que tools puede usar."""
-    text = user_message.lower()
-    has_product_or_package_reference = any(
-        term in text
+    texto = mensaje_usuario.lower()
+    tiene_referencia_producto_o_paquete = any(
+        term in texto
         for term in [
             "cerveza",
             "vino",
@@ -226,14 +226,14 @@ def obtener_disponibilidad_tools(user_message: str, state: QuoteState) -> dict[s
             "paquete",
         ]
     )
-    has_minimum_for_recommendation = not state.missing_fields
-    has_recommendation = state.recommended_option is not None
-    has_quote = state.quote is not None
-    return ToolReadinessContract(
-        can_answer_price=has_product_or_package_reference or has_recommendation,
-        can_validate_and_recommend=has_minimum_for_recommendation,
-        can_generate_quote=has_minimum_for_recommendation and has_recommendation,
-        can_show_image=has_quote,
+    tiene_minimo_para_recomendacion = not estado.campos_faltantes
+    tiene_recomendacion = estado.opcion_recomendada is not None
+    tiene_cotizacion = estado.cotizacion is not None
+    return ContratoDisponibilidadHerramientas(
+        puede_responder_precio=tiene_referencia_producto_o_paquete or tiene_recomendacion,
+        puede_validar_y_recomendar=tiene_minimo_para_recomendacion,
+        puede_generar_cotizacion=tiene_minimo_para_recomendacion and tiene_recomendacion,
+        puede_mostrar_imagen=tiene_cotizacion,
     ).a_diccionario()
 
 

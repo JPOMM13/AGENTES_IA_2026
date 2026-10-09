@@ -3,27 +3,27 @@ from __future__ import annotations
 from datetime import date, datetime, timedelta
 
 from app.data.mock_data import AVAILABILITY, DEFAULT_PRODUCT_STOCK, PRODUCT_CATEGORIES
-from app.state import QuoteState
+from app.estado import EstadoCotizacion
 
 
 # Ejecuta la responsabilidad de mock validar disponibilidad.
-def mock_validar_disponibilidad(state: QuoteState, options: list[dict]) -> dict:
+def mock_validar_disponibilidad(estado: EstadoCotizacion, options: list[dict]) -> dict:
     """Valida disponibilidad mock de paquetes para la fecha solicitada."""
     # MOCK: ESTA TOOL DEBERIA CONSULTAR DISPONIBILIDAD REAL EN EL SISTEMA DE RESERVAS/CALENDARIO O EN UNA TABLA TRANSACCIONAL DE CUPOS POR FECHA.
     available_options = []
-    discarded_options = []
+    opciones_descartadas = []
 
-    if not state.event_date:
-        return {"available_options": [], "discarded_options": options}
+    if not estado.fecha_evento:
+        return {"available_options": [], "opciones_descartadas": options}
 
-    event_date = datetime.fromisoformat(state.event_date).date()
-    if event_date < date.today() + timedelta(hours=72):
+    fecha_evento = datetime.fromisoformat(estado.fecha_evento).date()
+    if fecha_evento < date.today() + timedelta(hours=72):
         return {
             "available_options": [],
-            "discarded_options": [{"option": option, "reason": "No cumple anticipacion minima de 72 horas."} for option in options],
+            "opciones_descartadas": [{"option": option, "reason": "No cumple anticipacion minima de 72 horas."} for option in options],
         }
 
-    day_availability = AVAILABILITY.get(state.event_date, {})
+    day_availability = AVAILABILITY.get(estado.fecha_evento, {})
     for option in options:
         cupos = day_availability.get(option["id"], 1)
         if cupos > 0:
@@ -31,19 +31,19 @@ def mock_validar_disponibilidad(state: QuoteState, options: list[dict]) -> dict:
             enriched["available_slots"] = cupos
             available_options.append(enriched)
         else:
-            discarded_options.append({"option": option, "reason": "Sin disponibilidad para la fecha solicitada."})
+            opciones_descartadas.append({"option": option, "reason": "Sin disponibilidad para la fecha solicitada."})
 
-    return {"available_options": available_options, "discarded_options": discarded_options}
+    return {"available_options": available_options, "opciones_descartadas": opciones_descartadas}
 
 
 # Ejecuta la responsabilidad de mock validar stock productos.
-def mock_validar_stock_productos(state: QuoteState, requested_items: list[dict], products: list[dict]) -> dict:
+def mock_validar_stock_productos(estado: EstadoCotizacion, requested_items: list[dict], products: list[dict]) -> dict:
     """Valida stock mock por producto y calcula faltantes con alternativas."""
     # MOCK: ESTA TOOL DEBERIA CONSULTAR STOCK REAL EN INVENTARIO, ERP O TABLAS TRANSACCIONALES DE DISPONIBILIDAD POR PRODUCTO Y FECHA.
-    if not state.event_date:
+    if not estado.fecha_evento:
         return {"available_items": [], "missing_items": requested_items}
 
-    day_availability = {**DEFAULT_PRODUCT_STOCK, **AVAILABILITY.get(state.event_date, {})}
+    day_availability = {**DEFAULT_PRODUCT_STOCK, **AVAILABILITY.get(estado.fecha_evento, {})}
     product_by_category = {product["category"]: product for product in products}
     available_items = []
     missing_items = []

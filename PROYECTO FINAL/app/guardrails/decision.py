@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 from typing import Literal
 
-from app.state import QuoteState
+from app.estado import EstadoCotizacion
 
 
 AccionAgente = Literal[
@@ -21,18 +21,18 @@ AccionAgente = Literal[
 
 
 # Ejecuta la responsabilidad de validar decision agentica.
-def validar_decision_agentica(accion: str | None, mensaje_usuario: str, estado: QuoteState) -> AccionAgente | None:
+def validar_decision_agentica(accion: str | None, mensaje_usuario: str, estado: EstadoCotizacion) -> AccionAgente | None:
     """Corrige decisiones del LLM antes de permitir que cambien el flujo."""
     texto = mensaje_usuario.lower()
 
-    if estado.intent == "new_quote" or es_solicitud_nueva_cotizacion(texto):
+    if estado.intencion == "new_quote" or es_solicitud_nueva_cotizacion(texto):
         estado.registrar_log(
             "guardrail_decision_agentica",
             {"decision_original": accion, "decision_validada": "new_quote", "motivo": "nueva_cotizacion"},
         )
         return "new_quote"
 
-    if estado.intent == "resume_previous" or es_solicitud_recuperar_memoria(texto):
+    if estado.intencion == "resume_previous" or es_solicitud_recuperar_memoria(texto):
         estado.registrar_log(
             "guardrail_decision_agentica",
             {"decision_original": accion, "decision_validada": "resume_previous", "motivo": "recuperacion_memoria"},
@@ -46,21 +46,21 @@ def validar_decision_agentica(accion: str | None, mensaje_usuario: str, estado: 
         )
         return None
 
-    if accion == "generate_quote" and (estado.missing_fields or not estado.recommended_option):
+    if accion == "generate_quote" and (estado.campos_faltantes or not estado.opcion_recomendada):
         estado.registrar_log(
             "guardrail_decision_agentica",
             {"decision_original": accion, "decision_validada": "pedir_campos_faltantes", "motivo": "cotizacion_sin_prerequisitos"},
         )
         return "pedir_campos_faltantes"
 
-    if accion == "show_image" and not estado.quote:
+    if accion == "show_image" and not estado.cotizacion:
         estado.registrar_log(
             "guardrail_decision_agentica",
             {"decision_original": accion, "decision_validada": "pedir_campos_faltantes", "motivo": "imagen_sin_cotizacion"},
         )
         return "pedir_campos_faltantes"
 
-    if accion == "validate_and_recommend" and estado.missing_fields:
+    if accion == "validate_and_recommend" and estado.campos_faltantes:
         estado.registrar_log(
             "guardrail_decision_agentica",
             {"decision_original": accion, "decision_validada": "pedir_campos_faltantes", "motivo": "recomendacion_sin_minimos"},

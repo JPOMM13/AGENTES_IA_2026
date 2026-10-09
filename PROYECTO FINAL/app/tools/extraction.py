@@ -5,7 +5,7 @@ from datetime import date
 from typing import Any
 
 from app.guardrails.decision import es_solicitud_nueva_cotizacion, es_solicitud_recuperar_memoria
-from app.state import QuoteState
+from app.estado import EstadoCotizacion
 
 
 EVENT_ALIASES = {
@@ -38,131 +38,131 @@ MONTHS = {
 
 
 # Ejecuta la responsabilidad de extraer intencion y campos.
-def extraer_intencion_y_campos(message: str, state: QuoteState) -> dict[str, Any]:
+def extraer_intencion_y_campos(message: str, estado: EstadoCotizacion) -> dict[str, Any]:
     """Extrae intencion y campos del mensaje combinando reglas y agente."""
-    text = message.lower()
-    intent = _detectar_intencion(text, state)
+    texto = message.lower()
+    intencion = _detectar_intencion(texto, estado)
     fields: dict[str, Any] = {}
 
-    product_changes = _extraer_cambios_productos(text)
+    product_changes = _extraer_cambios_productos(texto)
     if product_changes:
         fields["product_changes"] = product_changes
-        if intent == "recommendation":
-            intent = "modify_request"
+        if intencion == "recommendation":
+            intencion = "modify_request"
 
-    event_type = _extraer_tipo_evento(text)
-    if event_type:
-        fields["event_type"] = event_type
+    tipo_evento = _extraer_tipo_evento(texto)
+    if tipo_evento:
+        fields["tipo_evento"] = tipo_evento
 
-    attendees = _extraer_asistentes(text)
-    if attendees is None and "attendees" in state.missing_fields:
-        attendees = _extraer_asistentes_contextuales(text)
-    if attendees:
-        fields["attendees"] = attendees
+    asistentes = _extraer_asistentes(texto)
+    if asistentes is None and "asistentes" in estado.campos_faltantes:
+        asistentes = _extraer_asistentes_contextuales(texto)
+    if asistentes:
+        fields["asistentes"] = asistentes
 
-    event_date = _extraer_fecha(text)
-    if event_date:
-        fields["event_date"] = event_date
+    fecha_evento = _extraer_fecha(texto)
+    if fecha_evento:
+        fields["fecha_evento"] = fecha_evento
     else:
-        partial_date = _extraer_fecha_parcial(text)
-        if partial_date:
-            fields["partial_date"] = partial_date
+        fecha_parcial = _extraer_fecha_parcial(texto)
+        if fecha_parcial:
+            fields["fecha_parcial"] = fecha_parcial
 
-    district = _extraer_distrito(message)
-    if district:
-        fields["district"] = district
+    distrito = _extraer_distrito(message)
+    if distrito:
+        fields["distrito"] = distrito
 
-    budget = _extraer_presupuesto(text)
-    if budget:
-        fields["budget"] = budget
+    presupuesto = _extraer_presupuesto(texto)
+    if presupuesto:
+        fields["presupuesto"] = presupuesto
 
-    customer_name = _extraer_nombre_cliente(message)
-    if not customer_name and "customer_name" in state.missing_fields:
-        customer_name = _extraer_nombre_cliente_contextual(message)
-    if customer_name:
-        fields["customer_name"] = customer_name
+    nombre_cliente = _extraer_nombre_cliente(message)
+    if not nombre_cliente and "nombre_cliente" in estado.campos_faltantes:
+        nombre_cliente = _extraer_nombre_cliente_contextual(message)
+    if nombre_cliente:
+        fields["nombre_cliente"] = nombre_cliente
 
-    contact = _extraer_contacto(message)
-    if contact:
-        fields["contact"] = contact
-        if state.intent == "resume_previous" and "contact" in state.missing_fields:
-            intent = "resume_previous"
+    contacto = _extraer_contacto(message)
+    if contacto:
+        fields["contacto"] = contacto
+        if estado.intencion == "resume_previous" and "contacto" in estado.campos_faltantes:
+            intencion = "resume_previous"
 
-    if not fields.get("customer_name") and contact:
-        customer_name_from_contact = _extraer_nombre_cerca_contacto(message, contact)
+    if not fields.get("nombre_cliente") and contacto:
+        customer_name_from_contact = _extraer_nombre_cerca_contacto(message, contacto)
         if customer_name_from_contact:
-            fields["customer_name"] = customer_name_from_contact
+            fields["nombre_cliente"] = customer_name_from_contact
 
-    preferences = _extraer_preferencias(text)
-    if preferences:
-        fields["preferences"] = preferences
+    preferencias = _extraer_preferencias(texto)
+    if preferencias:
+        fields["preferencias"] = preferencias
 
-    requested_products = _extraer_productos_solicitados(text)
-    if requested_products:
-        fields["requested_products"] = requested_products
+    productos_solicitados = _extraer_productos_solicitados(texto)
+    if productos_solicitados:
+        fields["productos_solicitados"] = productos_solicitados
 
-    unsupported_products = _extraer_productos_no_soportados(text, requested_products)
+    unsupported_products = _extraer_productos_no_soportados(texto, productos_solicitados)
     if unsupported_products:
-        fields["unsupported_requested_products"] = unsupported_products
+        fields["productos_solicitados_no_soportados"] = unsupported_products
 
-    agentic_fields = _extraer_campos_con_agente(message, state)
+    agentic_fields = _extraer_campos_con_agente(message, estado)
     fields = _fusionar_campos_agenticos(fields, agentic_fields)
     if fields.get("product_changes"):
-        intent = "modify_request"
-    elif intent not in {"resume_previous", "new_quote", "memory_check", "greeting"} and fields.get("intent_override") in {
+        intencion = "modify_request"
+    elif intencion not in {"resume_previous", "new_quote", "memory_check", "greeting"} and fields.get("intent_override") in {
         "modify_request",
         "review_order",
         "resume_previous",
         "new_quote",
     }:
-        intent = fields["intent_override"]
+        intencion = fields["intent_override"]
 
-    return {"intent": intent, "fields": fields}
+    return {"intencion": intencion, "fields": fields}
 
 
 # Ejecuta logica interna para detectar intencion.
-def _detectar_intencion(text: str, state: QuoteState) -> str:
+def _detectar_intencion(texto: str, estado: EstadoCotizacion) -> str:
     """Clasifica la intencion principal del usuario para dirigir el flujo."""
-    if es_solicitud_nueva_cotizacion(text):
+    if es_solicitud_nueva_cotizacion(texto):
         return "new_quote"
-    if es_solicitud_recuperar_memoria(text):
+    if es_solicitud_recuperar_memoria(texto):
         return "resume_previous"
-    if any(term in text for term in ["retomar", "continuar", "seguir"]) and any(
-        term in text for term in ["cotizacion", "cotización", "pedido", "conversacion", "conversación", "solicitud", "sesion", "sesión", "session", "datos"]
+    if any(term in texto for term in ["retomar", "continuar", "seguir"]) and any(
+        term in texto for term in ["cotizacion", "cotización", "pedido", "conversacion", "conversación", "solicitud", "sesion", "sesión", "session", "datos"]
     ):
         return "resume_previous"
-    if _es_solo_saludo(text):
+    if _es_solo_saludo(texto):
         return "greeting"
-    if any(term in text for term in ["ya te di mi nombre", "ya di mi nombre", "te di mi nombre"]):
+    if any(term in texto for term in ["ya te di mi nombre", "ya di mi nombre", "te di mi nombre"]):
         return "memory_check"
-    if any(term in text for term in ["imagen", "foto", "visual", "muéstrame", "muestrame", "ver como"]):
+    if any(term in texto for term in ["imagen", "foto", "visual", "muéstrame", "muestrame", "ver como"]):
         return "image_request"
-    if any(term in text for term in ["cerrar", "finalizar", "terminar conversacion", "terminar conversación"]):
+    if any(term in texto for term in ["cerrar", "finalizar", "terminar conversacion", "terminar conversación"]):
         return "close"
-    if any(term in text for term in ["asesor", "humano", "whatsapp", "derivame", "derívame"]):
+    if any(term in texto for term in ["asesor", "humano", "whatsapp", "derivame", "derívame"]):
         return "human_handoff"
-    if any(term in text for term in ["descuento", "rebaja", "menos precio"]):
+    if any(term in texto for term in ["descuento", "rebaja", "menos precio"]):
         return "discount_request"
-    if any(term in text for term in ["pagar", "pago", "separar", "reservar"]):
+    if any(term in texto for term in ["pagar", "pago", "separar", "reservar"]):
         return "payment_request"
-    if any(term in text for term in ["genera la cotizacion", "genera la cotización", "generame la cotizacion", "genérame la cotización", "cotizalo", "cotízalo", "emitir cotizacion", "emitir cotización"]):
-        return "quote"
-    if any(term in text for term in ["cuanto cuesta", "cuánto cuesta", "precio", "cuanto vale", "cuánto vale", "costo"]):
+    if any(term in texto for term in ["genera la cotizacion", "genera la cotización", "generame la cotizacion", "genérame la cotización", "cotizalo", "cotízalo", "emitir cotizacion", "emitir cotización"]):
+        return "cotizacion"
+    if any(term in texto for term in ["cuanto cuesta", "cuánto cuesta", "precio", "cuanto vale", "cuánto vale", "costo"]):
         return "price_query"
-    if state.handoff_offered and any(term in text for term in ["si", "sí", "ok", "dale", "acepto"]):
+    if estado.derivacion_ofrecida and any(term in texto for term in ["si", "sí", "ok", "dale", "acepto"]):
         return "handoff_confirmation"
-    if any(term in text for term in ["revisar pedido", "ver pedido", "mi pedido", "resumen del pedido", "qué tengo", "que tengo"]):
+    if any(term in texto for term in ["revisar pedido", "ver pedido", "mi pedido", "resumen del pedido", "qué tengo", "que tengo"]):
         return "review_order"
-    if any(term in text for term in ["cambiar", "modificar", "quitar", "sacar", "sin ", "reemplaza", "reemplázalo", "reemplazalo", "reemplazar", "otra fecha", "otro distrito"]):
+    if any(term in texto for term in ["cambiar", "modificar", "quitar", "sacar", "sin ", "reemplaza", "reemplázalo", "reemplazalo", "reemplazar", "otra fecha", "otro distrito"]):
         return "modify_request"
-    if any(term in text for term in ["politica", "política", "feriado", "anticipacion", "anticipación"]):
+    if any(term in texto for term in ["politica", "política", "feriado", "anticipacion", "anticipación"]):
         return "general_question"
     return "recommendation"
 
 # Ejecuta logica interna para es solo saludo.
-def _es_solo_saludo(text: str) -> bool:
+def _es_solo_saludo(texto: str) -> bool:
     """Distingue un saludo simple de una solicitud de cotizacion."""
-    cleaned = re.sub(r"[^\wáéíóúñ ]+", " ", text.lower()).strip()
+    cleaned = re.sub(r"[^\wáéíóúñ ]+", " ", texto.lower()).strip()
     quote_signals = [
         "cotizacion",
         "cotización",
@@ -189,78 +189,78 @@ def _es_solo_saludo(text: str) -> bool:
 
 
 # Ejecuta logica interna para extraer tipo evento.
-def _extraer_tipo_evento(text: str) -> str | None:
+def _extraer_tipo_evento(texto: str) -> str | None:
     """Normaliza el tipo de evento a una categoria soportada."""
     for canonical, aliases in EVENT_ALIASES.items():
-        if any(alias in text for alias in aliases):
+        if any(alias in texto for alias in aliases):
             return canonical
-    if "bebidas" in text:
+    if "bebidas" in texto:
         return "reunion"
     return None
 
 
 # Ejecuta logica interna para extraer asistentes.
-def _extraer_asistentes(text: str) -> int | None:
+def _extraer_asistentes(texto: str) -> int | None:
     """Extrae cantidad de asistentes cuando aparece con contexto textual."""
     patterns = [
         r"(\d{1,4})\s*(personas|asistentes|invitados|pax)",
         r"para\s*(\d{1,4})",
     ]
     for pattern in patterns:
-        match = re.search(pattern, text)
+        match = re.search(pattern, texto)
         if match:
             return int(match.group(1))
     return None
 
 
 # Ejecuta logica interna para extraer asistentes contextuales.
-def _extraer_asistentes_contextuales(text: str) -> int | None:
+def _extraer_asistentes_contextuales(texto: str) -> int | None:
     """Interpreta un numero suelto como asistentes solo si el flujo lo esperaba."""
-    match = re.fullmatch(r"\s*(\d{1,4})\s*", text)
+    match = re.fullmatch(r"\s*(\d{1,4})\s*", texto)
     if match:
         return int(match.group(1))
     return None
 
 
 # Ejecuta logica interna para extraer fecha.
-def _extraer_fecha(text: str) -> str | None:
+def _extraer_fecha(texto: str) -> str | None:
     """Extrae fecha completa y la normaliza a formato ISO YYYY-MM-DD."""
-    iso = re.search(r"(20\d{2})[-/](\d{1,2})[-/](\d{1,2})", text)
+    iso = re.search(r"(20\d{2})[-/](\d{1,2})[-/](\d{1,2})", texto)
     if iso:
-        year, month, day = map(int, iso.groups())
-        return date(year, month, day).isoformat()
+        anio, mes, dia = map(int, iso.groups())
+        return date(anio, mes, dia).isoformat()
 
-    numeric = re.search(r"(\d{1,2})[-/](\d{1,2})(?:[-/](20\d{2}))?", text)
+    numeric = re.search(r"(\d{1,2})[-/](\d{1,2})(?:[-/](20\d{2}))?", texto)
     if numeric:
-        day, month, year = numeric.groups()
-        return date(int(year or 2026), int(month), int(day)).isoformat()
+        dia, mes, anio = numeric.groups()
+        return date(int(anio or 2026), int(mes), int(dia)).isoformat()
 
     for nombre_mes, month_num in MONTHS.items():
-        match = re.search(rf"(?:para\s+)?(?:el\s+)?(\d{{1,2}})\s*(?:de\s*)?{nombre_mes}(?:\s*(?:del?|de)?\s*(20\d{{2}}))?", text)
+        match = re.search(rf"(?:para\s+)?(?:el\s+)?(\d{{1,2}})\s*(?:de\s*)?{nombre_mes}(?:\s*(?:del?|de)?\s*(20\d{{2}}))?", texto)
         if match:
-            day, year = match.groups()
-            return date(int(year or 2026), month_num, int(day)).isoformat()
+            dia, anio = match.groups()
+            return date(int(anio or 2026), month_num, int(dia)).isoformat()
     return None
 
 
 # Ejecuta logica interna para extraer fecha parcial.
-def _extraer_fecha_parcial(text: str) -> dict[str, int | None] | None:
+def _extraer_fecha_parcial(texto: str) -> dict[str, int | None] | None:
     """Extrae dia, mes o anio incompleto cuando falta parte de la fecha."""
-    partial: dict[str, int | None] = {"day": None, "month": None, "year": None}
+    partial: dict[str, int | None] = {"dia": None, "mes": None, "anio": None}
     for nombre_mes, month_num in MONTHS.items():
-        if nombre_mes in text:
-            partial["month"] = month_num
+        if nombre_mes in texto:
+            partial["mes"] = month_num
             break
 
-    day_match = re.search(r"(?:para\s+el|el|dia|día)\s+(\d{1,2})(?:\b|$)", text)
+    day_match = re.search(r"(?:para\s+el|el|dia|día)\s+(\d{1,2})(?:\b|$)", texto)
     if day_match:
         possible_day = int(day_match.group(1))
         if 1 <= possible_day <= 31:
-            partial["day"] = possible_day
+            partial["dia"] = possible_day
 
-    year_match = re.search(r"\b(20\d{2})\b", text)
+    year_match = re.search(r"\b(20\d{2})\b", texto)
     if year_match:
-        partial["year"] = int(year_match.group(1))
+        partial["anio"] = int(year_match.group(1))
 
     return partial if any(value is not None for value in partial.values()) else None
 
@@ -269,33 +269,33 @@ def _extraer_fecha_parcial(text: str) -> dict[str, int | None] | None:
 def _extraer_distrito(message: str) -> str | None:
     """Detecta distrito usando la lista de cobertura conocida."""
     lowered = message.lower()
-    for district in DISTRICTS:
-        if district.lower() in lowered:
-            return district
+    for distrito in DISTRICTS:
+        if distrito.lower() in lowered:
+            return distrito
     return None
 
 
 # Ejecuta logica interna para extraer presupuesto.
-def _extraer_presupuesto(text: str) -> float | None:
+def _extraer_presupuesto(texto: str) -> float | None:
     """Extrae presupuesto si el usuario lo menciona explicitamente."""
-    match = re.search(r"(?:presupuesto|hasta|s/|soles)\s*(\d{2,6})", text)
+    match = re.search(r"(?:presupuesto|hasta|s/|soles)\s*(\d{2,6})", texto)
     if match:
         return float(match.group(1))
     return None
 
 
 # Ejecuta logica interna para extraer preferencias.
-def _extraer_preferencias(text: str) -> list[str]:
+def _extraer_preferencias(texto: str) -> list[str]:
     """Extrae preferencias comerciales sin tratarlas como productos."""
-    preferences = []
+    preferencias = []
     for term in ["premium", "economico", "económico", "sencillo", "formal"]:
-        if term in text:
-            preferences.append("economico" if term == "económico" else term)
-    return preferences
+        if term in texto:
+            preferencias.append("economico" if term == "económico" else term)
+    return preferencias
 
 
 # Ejecuta logica interna para extraer productos solicitados.
-def _extraer_productos_solicitados(text: str) -> list[str]:
+def _extraer_productos_solicitados(texto: str) -> list[str]:
     """Extrae productos o servicios concretos solicitados por el usuario."""
     product_aliases = {
         "cerveza": ["cerveza", "cervezas"],
@@ -309,26 +309,26 @@ def _extraer_productos_solicitados(text: str) -> list[str]:
     }
     requested = []
     for canonical, aliases in product_aliases.items():
-        if any(alias in text for alias in aliases):
+        if any(alias in texto for alias in aliases):
             requested.append(canonical)
     return requested
 
 
 # Ejecuta logica interna para extraer cambios productos.
-def _extraer_cambios_productos(text: str) -> dict[str, list[str]]:
+def _extraer_cambios_productos(texto: str) -> dict[str, list[str]]:
     """Detecta acciones de agregar, quitar o reemplazar productos."""
-    products = _extraer_productos_solicitados(text)
+    products = _extraer_productos_solicitados(texto)
     changes: dict[str, list[str]] = {"remove": [], "add": [], "replace_from": [], "replace_to": []}
-    if any(term in text for term in ["quitar", "quita", "sacar", "saca", "sin ", "no quiero", "ya no quiero"]):
+    if any(term in texto for term in ["quitar", "quita", "sacar", "saca", "sin ", "no quiero", "ya no quiero"]):
         changes["remove"].extend(products)
-    if any(term in text for term in ["agrega", "agregar", "añade", "anade", "incluye", "sumar"]):
+    if any(term in texto for term in ["agrega", "agregar", "añade", "anade", "incluye", "sumar"]):
         changes["add"].extend(products)
 
-    replace_match = re.search(r"(?:cambia|cambiar|reemplaza|reemplazar)\s+(.+?)\s+por\s+(.+)", text)
+    replace_match = re.search(r"(?:cambia|cambiar|reemplaza|reemplazar)\s+(.+?)\s+por\s+(.+)", texto)
     if replace_match:
         changes["replace_from"].extend(_extraer_productos_solicitados(replace_match.group(1)))
         changes["replace_to"].extend(_extraer_productos_solicitados(replace_match.group(2)))
-    implicit_replace_match = re.search(r"(?:reemplazalo|reemplázalo|cambialo|cámbialo)\s+por\s+(.+)", text)
+    implicit_replace_match = re.search(r"(?:reemplazalo|reemplázalo|cambialo|cámbialo)\s+por\s+(.+)", texto)
     if implicit_replace_match:
         changes["replace_to"].extend(_extraer_productos_solicitados(implicit_replace_match.group(1)))
 
@@ -336,7 +336,7 @@ def _extraer_cambios_productos(text: str) -> dict[str, list[str]]:
 
 
 # Ejecuta logica interna para extraer productos no soportados.
-def _extraer_productos_no_soportados(text: str, requested_products: list[str]) -> list[str]:
+def _extraer_productos_no_soportados(texto: str, productos_solicitados: list[str]) -> list[str]:
     """Identifica productos pedidos que no existen en el catalogo mock."""
     unsupported_aliases = {
         "whisky": ["whisky", "whiskey"],
@@ -347,9 +347,9 @@ def _extraer_productos_no_soportados(text: str, requested_products: list[str]) -
     }
     unsupported = []
     for canonical, aliases in unsupported_aliases.items():
-        if canonical in requested_products:
+        if canonical in productos_solicitados:
             continue
-        if any(alias in text for alias in aliases):
+        if any(alias in texto for alias in aliases):
             unsupported.append(canonical)
     return unsupported
 
@@ -404,18 +404,18 @@ def _extraer_contacto(message: str) -> str | None:
 
 
 # Ejecuta logica interna para extraer nombre cerca contacto.
-def _extraer_nombre_cerca_contacto(message: str, contact: str) -> str | None:
+def _extraer_nombre_cerca_contacto(message: str, contacto: str) -> str | None:
     """Busca un nombre cercano al telefono cuando no hubo frase directa."""
     prefix_name = _extraer_nombre_antes_frase_contacto(message)
     if prefix_name:
         return prefix_name
 
-    text = re.sub(r"\b(?:mi\s+)?(?:telefono|teléfono|numero|número|celular|contacto)\s*(?:es|:)?\s*", " ", message, flags=re.IGNORECASE)
-    text = text.replace(contact, " ")
-    text = re.sub(r"\+?51?\d{9}", " ", text)
-    text = re.sub(r"\d+", " ", text)
-    text = re.sub(r"\b(?:mi|me|llamo|soy|es|y|el|la|para|personas|numero|número|telefono|teléfono)\b", " ", text, flags=re.IGNORECASE)
-    candidates = re.findall(r"\b[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+(?:\s+[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+){0,3}\b", text)
+    texto = re.sub(r"\b(?:mi\s+)?(?:telefono|teléfono|numero|número|celular|contacto)\s*(?:es|:)?\s*", " ", message, flags=re.IGNORECASE)
+    texto = texto.replace(contacto, " ")
+    texto = re.sub(r"\+?51?\d{9}", " ", texto)
+    texto = re.sub(r"\d+", " ", texto)
+    texto = re.sub(r"\b(?:mi|me|llamo|soy|es|y|el|la|para|personas|numero|número|telefono|teléfono)\b", " ", texto, flags=re.IGNORECASE)
+    candidates = re.findall(r"\b[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+(?:\s+[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+){0,3}\b", texto)
     if not candidates:
         return None
     name = max(candidates, key=len).strip()
@@ -442,7 +442,7 @@ def _extraer_nombre_antes_frase_contacto(message: str) -> str | None:
     if not split:
         return None
     prefix = re.sub(r"[^A-Za-zÁÉÍÓÚÑáéíóúñ\s]", " ", split[0])
-    district_tokens = {token.lower() for district in DISTRICTS for token in district.split()}
+    district_tokens = {token.lower() for distrito in DISTRICTS for token in distrito.split()}
     tokens = [
         token
         for token in prefix.split()
@@ -483,12 +483,12 @@ def _stopwords_nombre() -> set[str]:
 
 
 # Ejecuta logica interna para extraer campos con agente.
-def _extraer_campos_con_agente(message: str, state: QuoteState) -> dict[str, Any]:
+def _extraer_campos_con_agente(message: str, estado: EstadoCotizacion) -> dict[str, Any]:
     """Invoca el extractor con create_agent si esta disponible."""
     try:
         from app.agentic_extractor import extraer_campos_con_create_agent
 
-        return extraer_campos_con_create_agent(message, state)
+        return extraer_campos_con_create_agent(message, estado)
     except Exception:
         return {}
 
@@ -500,20 +500,20 @@ def _fusionar_campos_agenticos(fields: dict[str, Any], agentic_fields: dict[str,
     for key, value in agentic_fields.items():
         if value in (None, "", []):
             continue
-        if key == "preferences":
-            existing = merged.setdefault("preferences", [])
+        if key == "preferencias":
+            existing = merged.setdefault("preferencias", [])
             for preference in value:
                 if preference not in existing:
                     existing.append(preference)
             continue
-        if key == "requested_products":
-            existing = merged.setdefault("requested_products", [])
+        if key == "productos_solicitados":
+            existing = merged.setdefault("productos_solicitados", [])
             for product in value:
                 if product not in existing:
                     existing.append(product)
             continue
-        if key == "unsupported_requested_products":
-            existing = merged.setdefault("unsupported_requested_products", [])
+        if key == "productos_solicitados_no_soportados":
+            existing = merged.setdefault("productos_solicitados_no_soportados", [])
             for product in value:
                 if product not in existing:
                     existing.append(product)
@@ -529,8 +529,8 @@ def _fusionar_campos_agenticos(fields: dict[str, Any], agentic_fields: dict[str,
         if key == "intent_override":
             merged[key] = value
             continue
-        if key == "partial_date":
-            if not merged.get("event_date"):
+        if key == "fecha_parcial":
+            if not merged.get("fecha_evento"):
                 merged[key] = value
             continue
         merged.setdefault(key, value)

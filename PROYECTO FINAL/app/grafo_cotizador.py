@@ -13,7 +13,7 @@ from typing_extensions import TypedDict
 from app.guardrails.entrada import validar_mensaje_entrada
 from app.guardrails.salida import asegurar_respuesta_final
 from app.observabilidad import configurar_langsmith
-from app.state import QuoteState
+from app.estado import EstadoCotizacion
 from app.workflow import (
     decidir_accion_agentica_turno,
     ejecutar_decision_negocio,
@@ -27,7 +27,7 @@ class EstadoGrafoCotizador(TypedDict, total=False):
     """Estado interno que viaja entre nodos del grafo LangGraph."""
 
     mensaje_usuario: str
-    estado_cotizacion: QuoteState
+    estado_cotizacion: EstadoCotizacion
     respuesta_base: str
     respuesta_final: str
     etapa: str
@@ -35,7 +35,7 @@ class EstadoGrafoCotizador(TypedDict, total=False):
 
 
 # Ejecuta la responsabilidad de ejecutar grafo cotizador.
-def ejecutar_grafo_cotizador(mensaje_usuario: str, estado: QuoteState) -> tuple[str, QuoteState]:
+def ejecutar_grafo_cotizador(mensaje_usuario: str, estado: EstadoCotizacion) -> tuple[str, EstadoCotizacion]:
     """Ejecuta el workflow agentico conversacional basado en LangGraph."""
     configurar_langsmith()
     resultado = obtener_grafo_cotizador().invoke(
@@ -113,7 +113,7 @@ def extraer_y_enrutar_intencion(estado_grafo: EstadoGrafoCotizador) -> EstadoGra
     estado = preparar_turno_usuario(mensaje, estado_grafo["estado_cotizacion"])
     estado.registrar_log(
         "nodo_extraer_y_enrutar_intencion",
-        {"intent": estado.intent, "missing_fields": estado.missing_fields},
+        {"intencion": estado.intencion, "campos_faltantes": estado.campos_faltantes},
     )
     return {**estado_grafo, "estado_cotizacion": estado}
 
@@ -126,7 +126,7 @@ def gestionar_memoria_persistente(estado_grafo: EstadoGrafoCotizador) -> EstadoG
     resultado = resolver_memoria_y_elecciones_previas(mensaje, estado)
     estado.registrar_log(
         "nodo_gestionar_memoria_persistente",
-        {"resuelto_en_memoria": bool(resultado), "contact": estado.contact},
+        {"resuelto_en_memoria": bool(resultado), "contacto": estado.contacto},
     )
     if not resultado:
         return {**estado_grafo, "estado_cotizacion": estado, "finalizado": False}
@@ -145,7 +145,7 @@ def decidir_accion_agentica(estado_grafo: EstadoGrafoCotizador) -> EstadoGrafoCo
     """Permite que create_agent decida la siguiente accion de alto nivel."""
     mensaje = estado_grafo["mensaje_usuario"]
     estado = decidir_accion_agentica_turno(mensaje, estado_grafo["estado_cotizacion"])
-    estado.registrar_log("nodo_decidir_accion_agentica", {"intent_resultante": estado.intent})
+    estado.registrar_log("nodo_decidir_accion_agentica", {"intent_resultante": estado.intencion})
     return {**estado_grafo, "estado_cotizacion": estado}
 
 

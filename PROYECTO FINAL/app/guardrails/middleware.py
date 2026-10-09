@@ -6,7 +6,7 @@ from langchain.agents.middleware import PIIMiddleware
 
 from app.guardrails.entrada import validar_mensaje_entrada
 from app.guardrails.salida import validar_salida_agente
-from app.state import QuoteState
+from app.estado import EstadoCotizacion
 
 
 # RESUMEN: ESTE MODULO FUNCIONA COMO MIDDLEWARE ENTRE EL WORKFLOW Y CREATE_AGENT.
@@ -46,7 +46,7 @@ def invocar_agente_con_guardrails(
     agente: Any,
     carga_agente: dict[str, Any],
     mensaje_usuario: str,
-    estado: QuoteState,
+    estado: EstadoCotizacion,
     nombre_agente: str,
 ) -> dict[str, Any] | None:
     """Envuelve create_agent.invoke con guardrail de entrada y salida."""

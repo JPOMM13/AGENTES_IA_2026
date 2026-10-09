@@ -192,19 +192,19 @@ MOCK_KNOWLEDGE = [
     {
         "id": "POL-001",
         "title": "Anticipacion minima",
-        "text": "Los pedidos deben realizarse con al menos 72 horas de anticipacion.",
+        "texto": "Los pedidos deben realizarse con al menos 72 horas de anticipacion.",
         "keywords": ["anticipacion", "72", "horas", "pedido"],
     },
     {
         "id": "POL-002",
         "title": "Feriados",
-        "text": "En feriados, la entrega puede realizarse el dia habil anterior y el recojo el dia habil siguiente.",
+        "texto": "En feriados, la entrega puede realizarse el dia habil anterior y el recojo el dia habil siguiente.",
         "keywords": ["feriado", "feriados", "entrega", "recojo"],
     },
     {
         "id": "POL-003",
         "title": "Descuentos",
-        "text": "Los descuentos, convenios y excepciones comerciales deben ser aprobados por un asesor humano.",
+        "texto": "Los descuentos, convenios y excepciones comerciales deben ser aprobados por un asesor humano.",
         "keywords": ["descuento", "descuentos", "convenio", "excepcion"],
     },
 ]

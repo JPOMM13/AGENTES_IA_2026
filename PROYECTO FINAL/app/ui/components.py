@@ -5,71 +5,71 @@ from pathlib import Path
 import streamlit as st
 
 from app.artifacts import refrescar_artefacto_visual_si_es_necesario
-from app.state import QuoteState
+from app.estado import EstadoCotizacion
 
 
 # Ejecuta la responsabilidad de renderizar panel estado.
-def renderizar_panel_estado(state: QuoteState) -> None:
+def renderizar_panel_estado(estado: EstadoCotizacion) -> None:
     """Muestra estado, dimensionamiento, derivacion y trazas en sidebar."""
     st.sidebar.subheader("Estado de la solicitud")
-    st.sidebar.json(state.a_diccionario_panel())
+    st.sidebar.json(estado.a_diccionario_panel())
 
-    if state.dimensioning:
+    if estado.dimensionamiento:
         st.sidebar.subheader("Dimensionamiento mock")
-        st.sidebar.json(state.dimensioning)
+        st.sidebar.json(estado.dimensionamiento)
 
-    if state.handoff_summary:
+    if estado.resumen_derivacion:
         st.sidebar.subheader("Resumen para asesor")
-        st.sidebar.json(state.handoff_summary["summary"])
+        st.sidebar.json(estado.resumen_derivacion["summary"])
 
     with st.sidebar.expander("Trazas"):
-        st.json(state.logs[-12:])
+        st.json(estado.trazas[-12:])
 
 
 # Ejecuta la responsabilidad de renderizar tarjeta imagen.
-def renderizar_tarjeta_imagen(state: QuoteState) -> None:
+def renderizar_tarjeta_imagen(estado: EstadoCotizacion) -> None:
     """Muestra la imagen generada para la cotizacion o una imagen solicitada."""
-    option = state.recommended_option
-    if not option or not state.quote:
+    option = estado.opcion_recomendada
+    if not option or not estado.cotizacion:
         return
 
     st.subheader("Imagen del evento cotizado")
     cols = st.columns([1, 2])
     with cols[0]:
-        refrescar_artefacto_visual_si_es_necesario(state)
-        image_path = Path(state.quote_artifact_image or option.get("image", ""))
+        refrescar_artefacto_visual_si_es_necesario(estado)
+        image_path = Path(estado.imagen_artefacto_cotizacion or option.get("image", ""))
         if image_path.exists():
             st.image(str(image_path), use_container_width=True)
         else:
             st.info("Imagen del evento no disponible.")
     with cols[1]:
         st.markdown(f"**{option['name']}**")
-        renderizar_resumen_imagen_evento(state)
+        renderizar_resumen_imagen_evento(estado)
         st.caption("Imagen generada como artefacto visual de la cotizacion. No reemplaza la validacion de precio, cobertura ni disponibilidad.")
 
 
 # Ejecuta la responsabilidad de renderizar resumen imagen evento.
-def renderizar_resumen_imagen_evento(state: QuoteState) -> None:
+def renderizar_resumen_imagen_evento(estado: EstadoCotizacion) -> None:
     """Muestra el resumen comercial de la cotizacion junto a la imagen."""
-    quote = state.quote or {}
-    currency = quote.get("currency", "PEN")
+    cotizacion = estado.cotizacion or {}
+    currency = cotizacion.get("currency", "PEN")
 
     st.markdown("**Resumen del evento**")
     st.markdown(
         "\n".join(
             [
-                f"- Evento: {state.event_type or 'por confirmar'}",
-                f"- Asistentes: {state.attendees or 'por confirmar'}",
-                f"- Fecha: {state.event_date or 'por confirmar'}",
-                f"- Distrito: {state.district or 'por confirmar'}",
-                f"- Cotizante: {state.customer_name or 'por confirmar'}",
-                f"- Contacto: {state.contact or 'por confirmar'}",
+                f"- Evento: {estado.tipo_evento or 'por confirmar'}",
+                f"- Asistentes: {estado.asistentes or 'por confirmar'}",
+                f"- Fecha: {estado.fecha_evento or 'por confirmar'}",
+                f"- Distrito: {estado.distrito or 'por confirmar'}",
+                f"- Cotizante: {estado.nombre_cliente or 'por confirmar'}",
+                f"- Contacto: {estado.contacto or 'por confirmar'}",
             ]
         )
     )
 
     st.markdown("**Productos y servicios cotizados**")
-    for item in quote.get("details", []):
+    for item in cotizacion.get("details", []):
         concept = item.get("product_name") or item.get("concept", "item")
         quantity = item.get("quantity", 1)
         unit = item.get("unit", "unidad")
@@ -80,24 +80,24 @@ def renderizar_resumen_imagen_evento(state: QuoteState) -> None:
     st.markdown(
         "\n".join(
             [
-                f"- Subtotal: {currency} {quote.get('subtotal', 0):.2f}",
-                f"- IGV: {currency} {quote.get('taxes', 0):.2f}",
-                f"- Total: **{currency} {quote.get('total', 0):.2f}**",
+                f"- Subtotal: {currency} {cotizacion.get('subtotal', 0):.2f}",
+                f"- IGV: {currency} {cotizacion.get('taxes', 0):.2f}",
+                f"- Total: **{currency} {cotizacion.get('total', 0):.2f}**",
             ]
         )
     )
 
 
 # Ejecuta la responsabilidad de renderizar tarjeta cotizacion.
-def renderizar_tarjeta_cotizacion(state: QuoteState) -> None:
+def renderizar_tarjeta_cotizacion(estado: EstadoCotizacion) -> None:
     """Muestra tarjeta resumida de la cotizacion generada."""
-    if not state.quote:
+    if not estado.cotizacion:
         return
-    quote = state.quote
+    cotizacion = estado.cotizacion
     st.subheader("Cotizacion mock")
-    st.metric("Total", f"{quote['currency']} {quote['total']:.2f}")
-    st.write(f"Subtotal: {quote['currency']} {quote['subtotal']:.2f}")
-    st.write(f"IGV: {quote['currency']} {quote['taxes']:.2f}")
-    st.write(f"Vigencia: {quote['valid_until']}")
-    for condition in quote["conditions"]:
+    st.metric("Total", f"{cotizacion['currency']} {cotizacion['total']:.2f}")
+    st.write(f"Subtotal: {cotizacion['currency']} {cotizacion['subtotal']:.2f}")
+    st.write(f"IGV: {cotizacion['currency']} {cotizacion['taxes']:.2f}")
+    st.write(f"Vigencia: {cotizacion['valid_until']}")
+    for condition in cotizacion["conditions"]:
         st.caption(condition)
