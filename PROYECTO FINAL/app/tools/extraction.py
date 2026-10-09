@@ -76,12 +76,16 @@ def extraer_intencion_y_campos(message: str, state: QuoteState) -> dict[str, Any
         fields["budget"] = budget
 
     customer_name = _extraer_nombre_cliente(message)
+    if not customer_name and "customer_name" in state.missing_fields:
+        customer_name = _extraer_nombre_cliente_contextual(message)
     if customer_name:
         fields["customer_name"] = customer_name
 
     contact = _extraer_contacto(message)
     if contact:
         fields["contact"] = contact
+        if state.intent == "resume_previous" and "contact" in state.missing_fields:
+            intent = "resume_previous"
 
     if not fields.get("customer_name") and contact:
         customer_name_from_contact = _extraer_nombre_cerca_contacto(message, contact)
@@ -127,6 +131,9 @@ def _detectar_intencion(text: str, state: QuoteState) -> str:
             "datos anteriormente",
             "otra session",
             "otra sesión",
+            "session antes",
+            "sesion antes",
+            "sesión antes",
             "sesion anterior",
             "sesión anterior",
             "interaccion anterior",
@@ -373,6 +380,7 @@ def _extraer_nombre_cliente(message: str) -> str | None:
     patterns = [
         r"(?:me llamo|soy|mi nombre es)\s+([A-Za-zÁÉÍÓÚÑáéíóúñ ]{2,40})",
         r"(?:a nombre de)\s+([A-Za-zÁÉÍÓÚÑáéíóúñ ]{2,40})",
+        r"(?:es para|para)\s+([A-Za-zÁÉÍÓÚÑáéíóúñ ]{2,40})",
     ]
     for pattern in patterns:
         match = re.search(pattern, message, flags=re.IGNORECASE)
@@ -383,6 +391,23 @@ def _extraer_nombre_cliente(message: str) -> str | None:
                 if stop_word in name.lower():
                     name = name[: name.lower().index(stop_word)].strip()
             return name.title()
+    return None
+
+
+# Ejecuta logica interna para extraer nombre cliente contextual.
+def _extraer_nombre_cliente_contextual(message: str) -> str | None:
+    """Extrae un nombre cuando el flujo esta esperando solo el cotizante."""
+    cleaned = message.strip(" .,:;")
+    if re.fullmatch(r"[A-Za-zÁÉÍÓÚÑáéíóúñ]+(?:\s+[A-Za-zÁÉÍÓÚÑáéíóúñ]+){1,3}", cleaned):
+        if not any(token.lower() in _stopwords_nombre() for token in cleaned.split()):
+            return cleaned.title()
+    match = re.search(
+        r"(?:es\s+para|para)\s+([A-Za-zÁÉÍÓÚÑáéíóúñ]+(?:\s+[A-Za-zÁÉÍÓÚÑáéíóúñ]+){1,3})",
+        message,
+        flags=re.IGNORECASE,
+    )
+    if match:
+        return match.group(1).strip(" .,:;").title()
     return None
 
 

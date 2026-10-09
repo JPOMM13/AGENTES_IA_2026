@@ -6,6 +6,7 @@ from functools import lru_cache
 from typing import Any
 
 from app.agentic_decider import debe_usar_create_agent
+from app.guardrails.middleware import invocar_agente_con_guardrails, obtener_middleware_langchain_guardrails
 from app.llm_config import obtener_configuracion_llm
 from app.state import QuoteState
 
@@ -21,7 +22,7 @@ def extraer_campos_con_create_agent(user_message: str, state: QuoteState) -> dic
         return {}
     try:
         agent = obtener_agente_extractor()
-        result = agent.invoke(
+        carga_agente = (
             {
                 "messages": [
                     {
@@ -37,6 +38,9 @@ def extraer_campos_con_create_agent(user_message: str, state: QuoteState) -> dic
                 ]
             }
         )
+        result = invocar_agente_con_guardrails(agent, carga_agente, user_message, state, "agente_extractor")
+        if not result:
+            return {}
         return normalizar_campos_extraidos(extraer_payload_tool(result["messages"]), user_message)
     except Exception:
         return {}
@@ -141,6 +145,7 @@ FORMATO DE SALIDA:
         model=config.modelo_langchain,
         tools=[registrar_campos_extraidos],
         system_prompt=system_prompt,
+        middleware=obtener_middleware_langchain_guardrails(),
     )
     return agente
 

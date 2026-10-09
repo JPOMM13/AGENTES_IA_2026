@@ -457,6 +457,69 @@ def test_datos_anteriores_y_seguir_conversacion_pide_contacto():
     assert "cantidad de asistentes" not in response
 
 
+# Prueba que el telefono posterior a una solicitud de recuperar memoria se usa para buscar memoria.
+def test_contacto_despues_de_retomar_busca_memoria_y_si_no_existe_inicia_nueva(monkeypatch, tmp_path):
+    monkeypatch.setattr(session_store, "STORE_PATH", tmp_path / "mock_session_memory.json")
+    monkeypatch.setattr(redis_session_store, "REDIS_MOCK_PATH", tmp_path / "mock_redis_session.json")
+    state = QuoteState()
+
+    response, state = manejar_mensaje("tuve una sesion anterior donde te di ya mis datos", state)
+    assert state.intent == "resume_previous"
+    assert "telefono o correo" in response
+
+    response, state = manejar_mensaje("989515182", state)
+
+    assert state.intent == "resume_previous"
+    assert state.contact == "989515182"
+    assert "No encontre una cotizacion anterior" in response
+    assert "Empecemos una nueva cotizacion" in response
+    assert "productos o servicios" not in response.split("Memoria temporal")[0]
+
+
+# Prueba que una busqueda de memoria sin datos no se guarde como cotizacion previa.
+def test_busqueda_sin_memoria_no_crea_cotizacion_previa_falsa(monkeypatch, tmp_path):
+    monkeypatch.setattr(session_store, "STORE_PATH", tmp_path / "mock_session_memory.json")
+    monkeypatch.setattr(redis_session_store, "REDIS_MOCK_PATH", tmp_path / "mock_redis_session.json")
+    state = QuoteState()
+
+    _, state = manejar_mensaje("tuve una sesion anterior donde te di ya mis datos", state)
+    response, state = manejar_mensaje("989515182", state)
+    assert "No encontre una cotizacion anterior" in response
+
+    new_state = QuoteState()
+    _, new_state = manejar_mensaje("tuve una sesion anterior donde te di ya mis datos", new_state)
+    response, new_state = manejar_mensaje("989515182", new_state)
+
+    assert "No encontre una cotizacion anterior" in response
+    assert "retome la ultima cotizacion" not in response
+
+
+# Prueba que una memoria sin cotizante ni productos no se trate como cotizacion anterior util.
+def test_memoria_incompleta_sin_nombre_no_se_retoma_como_cotizacion(monkeypatch, tmp_path):
+    monkeypatch.setattr(session_store, "STORE_PATH", tmp_path / "mock_session_memory.json")
+    monkeypatch.setattr(redis_session_store, "REDIS_MOCK_PATH", tmp_path / "mock_redis_session.json")
+    previous = QuoteState(contact="989515182", event_type="matrimonio", attendees=49, event_date="2027-03-03", district="Miraflores")
+    session_store.guardar_estado_conversacion(previous)
+
+    state = QuoteState()
+    _, state = manejar_mensaje("tuve una sesion anterior donde te di ya mis datos", state)
+    response, state = manejar_mensaje("989515182", state)
+
+    assert "No encontre una cotizacion anterior" in response
+    assert "retome la ultima cotizacion" not in response
+
+
+# Prueba que el nombre se capture cuando el flujo esta esperando cotizante.
+def test_nombre_contextual_se_captura_cuando_falta_cotizante():
+    state = QuoteState()
+    _, state = manejar_mensaje("matrimonio para 49 personas el 3 de marzo de 2027 en Miraflores mi telefono es 989515182", state)
+
+    response, state = manejar_mensaje("es para John Manchego", state)
+
+    assert state.customer_name == "John Manchego"
+    assert "nombre de la persona que cotiza" not in response.split("Memoria temporal")[0]
+
+
 # Prueba el comportamiento de test sesion activa se guarda por session id.
 def test_sesion_activa_se_guarda_por_session_id(monkeypatch, tmp_path):
     monkeypatch.setattr(redis_session_store, "REDIS_MOCK_PATH", tmp_path / "mock_redis_session.json")

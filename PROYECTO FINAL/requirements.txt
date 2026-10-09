@@ -4,3 +4,4 @@ langchain>=1.0
 langchain-ollama>=1.0
 langchain-openai>=1.0
 langgraph>=1.0
+langsmith>=0.13

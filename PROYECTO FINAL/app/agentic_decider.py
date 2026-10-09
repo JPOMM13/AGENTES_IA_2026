@@ -5,6 +5,7 @@ from functools import lru_cache
 from typing import Literal
 
 from app.contracts import ToolReadinessContract
+from app.guardrails.middleware import invocar_agente_con_guardrails, obtener_middleware_langchain_guardrails
 from app.llm_config import obtener_configuracion_llm
 from app.state import QuoteState
 
@@ -39,7 +40,7 @@ def decidir_siguiente_accion_con_agente(user_message: str, state: QuoteState) ->
     try:
         readiness = obtener_disponibilidad_tools(user_message, state)
         agent = obtener_agente_decisor()
-        result = agent.invoke(
+        carga_agente = (
             {
                 "messages": [
                     {
@@ -58,6 +59,9 @@ def decidir_siguiente_accion_con_agente(user_message: str, state: QuoteState) ->
                 ]
             }
         )
+        result = invocar_agente_con_guardrails(agent, carga_agente, user_message, state, "agente_decisor")
+        if not result:
+            return None
         return extraer_decision_de_mensajes(result["messages"])
     except Exception:
         return None
@@ -147,6 +151,7 @@ FORMATO DE SALIDA:
         model=config.modelo_langchain,
         tools=[elegir_accion_workflow],
         system_prompt=system_prompt,
+        middleware=obtener_middleware_langchain_guardrails(),
     )
     return agente
 

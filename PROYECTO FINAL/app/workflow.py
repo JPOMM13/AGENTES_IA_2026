@@ -25,92 +25,115 @@ QUOTE_MEMORY = QuoteMemoryRepository()
 
 # Ejecuta la responsabilidad de manejar mensaje.
 def manejar_mensaje(user_message: str, state: QuoteState) -> tuple[str, QuoteState]:
-    """Orquesta un turno: extrae datos, decide accion, llama tools y responde."""
+    """Orquesta el turno usando el grafo LangGraph del cotizador."""
+    from app.grafo_cotizador import ejecutar_grafo_cotizador
+
+    return ejecutar_grafo_cotizador(user_message, state)
+
+
+# Ejecuta la responsabilidad de preparar turno usuario.
+def preparar_turno_usuario(user_message: str, state: QuoteState) -> QuoteState:
+    """Registra el mensaje, extrae intencion/campos y actualiza memoria operativa."""
     state.messages.append({"role": "user", "content": user_message})
     extraction = extraer_intencion_y_campos(user_message, state)
     state.registrar_log("extraer_intencion_y_campos", extraction)
     fusionar_extraccion_en_estado(state, extraction)
     state.missing_fields = encontrar_campos_faltantes(state)
     state.registrar_log("tool_readiness", obtener_disponibilidad_tools(user_message, state))
+    return state
 
+
+# Ejecuta la responsabilidad de resolver memoria antes del negocio.
+def resolver_memoria_y_elecciones_previas(user_message: str, state: QuoteState) -> tuple[str, QuoteState, str] | None:
+    """Resuelve recuperacion de memoria o eleccion pendiente antes de llamar tools."""
     pending_response = manejar_eleccion_previa_pendiente(user_message, state)
     if pending_response:
         response, state = pending_response
-        return _finalizar(response, state, state.stage)
+        return response, state, state.stage
 
     previous_response = detectar_conversacion_previa_por_contacto(state)
     if previous_response:
-        return _finalizar(previous_response, state, "validacion_memoria")
+        return previous_response, state, "validacion_memoria"
+    return None
 
+
+# Ejecuta la responsabilidad de decidir accion agentica turno.
+def decidir_accion_agentica_turno(user_message: str, state: QuoteState) -> QuoteState:
+    """Usa create_agent para decidir accion de alto nivel cuando corresponde."""
     agent_action = None if state.intent in {"greeting", "memory_check", "modify_request", "review_order"} else decidir_siguiente_accion_con_agente(user_message, state)
     if agent_action:
         state.registrar_log("create_agent_decision", {"action": agent_action})
         aplicar_accion_agente_a_intencion(agent_action, state, user_message)
+    return state
 
+
+# Ejecuta la responsabilidad de ejecutar decision negocio.
+def ejecutar_decision_negocio(user_message: str, state: QuoteState) -> tuple[str, QuoteState, str]:
+    """Ejecuta las tools mock y reglas de negocio segun el estado/intencion."""
     if state.intent == "image_request":
         response = renderizar_respuesta_solicitud_imagen(state)
-        return _finalizar(response, state, "imagen")
+        return response, state, "imagen"
 
     if state.intent == "close":
         response = renderizar_respuesta_cierre(state)
-        return _finalizar(response, state, "cierre")
+        return response, state, "cierre"
 
     if state.intent == "memory_check":
         response = renderizar_respuesta_consulta_memoria(state)
-        return _finalizar(response, state, "memoria")
+        return response, state, "memoria"
 
     if state.intent == "resume_previous":
         response, state = manejar_retomar_previa(state)
-        return _finalizar(response, state, "memoria_previa")
+        return response, state, "memoria_previa"
 
     if state.intent == "greeting":
         response = renderizar_respuesta_saludo(state)
-        return _finalizar(response, state, "saludo")
+        return response, state, "saludo"
 
     if state.intent == "review_order":
         response = renderizar_respuesta_revision_pedido(state)
-        return _finalizar(response, state, "revision_pedido")
+        return response, state, "revision_pedido"
 
     if state.intent == "general_question":
         response = renderizar_respuesta_rag(user_message)
-        return _finalizar(response, state, "politica")
+        return response, state, "politica"
 
     if state.intent == "price_query":
         response = renderizar_respuesta_consulta_precio(user_message, state)
-        return _finalizar(response, state, "consulta_precio")
+        return response, state, "consulta_precio"
 
     if state.intent == "human_handoff":
         state.handoff_confirmed = True
         handoff = mock_derivar_whatsapp(state, reason="Solicitud explicita del usuario.")
         state.handoff_summary = handoff
         response = renderizar_respuesta_derivacion(handoff)
-        return _finalizar(response, state, "derivacion")
+        return response, state, "derivacion"
 
     if state.intent in {"discount_request", "payment_request"}:
         state.handoff_offered = True
         response = pedir_confirmacion_derivacion(state)
-        return _finalizar(response, state, "derivacion_ofrecida")
+        return response, state, "derivacion_ofrecida"
 
     if state.intent == "modify_request":
         response = renderizar_respuesta_revision_pedido(state)
         if not state.product_change_cleared_unsupported:
-            return _finalizar(response, state, "pedido_modificado")
+            return response, state, "pedido_modificado"
 
     if state.intent == "handoff_confirmation" and state.handoff_offered:
         state.handoff_confirmed = True
         handoff = mock_derivar_whatsapp(state, reason="Usuario acepta derivacion por WhatsApp.")
         state.handoff_summary = handoff
         response = renderizar_respuesta_derivacion(handoff)
-        return _finalizar(response, state, "derivacion")
+        return response, state, "derivacion"
 
     state.registrar_log("encontrar_campos_faltantes", {"missing_fields": state.missing_fields})
     if state.missing_fields:
         response = pedir_campos_faltantes_para_estado(state)
-        return _finalizar(response, state, "recoleccion")
+        return response, state, "recoleccion"
 
     if state.unsupported_requested_products:
         response = renderizar_respuesta_productos_no_soportados(state)
-        return _finalizar(response, state, "alternativas_producto")
+        return response, state, "alternativas_producto"
 
     coverage = mock_validar_cobertura(state)
     state.coverage_ok = coverage["ok"]
@@ -121,7 +144,7 @@ def manejar_mensaje(user_message: str, state: QuoteState) -> tuple[str, QuoteSta
             f"No tengo cobertura mock confirmada para {state.district}. "
             "No voy a cotizar sin cobertura validada. Si deseas, puedo derivarte con un asesor por WhatsApp."
         )
-        return _finalizar(response, state, "sin_cobertura")
+        return response, state, "sin_cobertura"
 
     catalog_result = mock_buscar_catalogo(state)
     state.catalog_options = catalog_result["options"]
@@ -149,7 +172,7 @@ def manejar_mensaje(user_message: str, state: QuoteState) -> tuple[str, QuoteSta
             state.stock_shortage_products = [item["concept"] for item in stock_result["missing_items"]]
             state.handoff_offered = True
             response = renderizar_respuesta_sin_stock(state, stock_result)
-            return _finalizar(response, state, "sin_stock")
+            return response, state, "sin_stock"
         state.availability_ok = True
         state.handoff_offered = False
         state.stock_shortage_products = []
@@ -162,10 +185,16 @@ def manejar_mensaje(user_message: str, state: QuoteState) -> tuple[str, QuoteSta
         state.quote_artifact_image = generar_artefacto_visual_cotizacion(state)
         state.registrar_log("generar_artefacto_visual_cotizacion", {"path": state.quote_artifact_image})
         response = renderizar_respuesta_cotizacion(state)
-        return _finalizar(response, state, "cotizacion")
+        return response, state, "cotizacion"
 
     response = renderizar_respuesta_recomendacion(state)
-    return _finalizar(response, state, "recomendacion")
+    return response, state, "recomendacion"
+
+
+# Ejecuta la responsabilidad de finalizar turno cotizador.
+def finalizar_turno_cotizador(response: str, state: QuoteState, stage: str) -> tuple[str, QuoteState]:
+    """Aplica pulido, memoria visible y persistencia despues del grafo."""
+    return _finalizar(response, state, stage)
 
 
 # Ejecuta la responsabilidad de fusionar extraccion en estado.
@@ -223,7 +252,7 @@ def detectar_conversacion_previa_por_contacto(state: QuoteState) -> str | None:
     previous = QUOTE_MEMORY.buscar_por_contacto(state.contact)
     if not previous or previous.session_id == state.session_id:
         return None
-    if not previous.requested_products and not previous.quote and not previous.recommended_option:
+    if not tiene_memoria_cotizacion_util(previous):
         return None
     state.pending_previous_state = previous.a_diccionario_persistido()
     state.intent = "previous_found"
@@ -762,10 +791,11 @@ def manejar_retomar_previa(state: QuoteState) -> tuple[str, QuoteState]:
 
     # MOCK: AQUI SE CONSULTARIA POSTGRESQL O NOSQL PARA RECUPERAR LA SESSION/COTIZACION ANTERIOR DEL CLIENTE.
     previous = QUOTE_MEMORY.buscar_por_contacto(state.contact)
-    if not previous:
+    if not previous or not tiene_memoria_cotizacion_util(previous):
+        state.missing_fields = encontrar_campos_faltantes(state)
         return (
-            f"No encontre una cotizacion anterior para {state.customer_name} con el contacto {state.contact}. "
-            "Podemos empezar una nueva con esos datos.",
+            f"No encontre una cotizacion anterior asociada al contacto **{state.contact}**. "
+            "Empecemos una nueva cotizacion con ese contacto: cuentame el tipo de evento, cantidad de asistentes y fecha.",
             state,
         )
 
@@ -782,6 +812,18 @@ def manejar_retomar_previa(state: QuoteState) -> tuple[str, QuoteState]:
         f"{renderizar_respuesta_revision_pedido(resumed)}"
     )
     return response, resumed
+
+
+# Ejecuta la responsabilidad de tiene memoria cotizacion util.
+def tiene_memoria_cotizacion_util(state: QuoteState) -> bool:
+    """Evita tratar registros vacios o solo-contacto como cotizaciones previas."""
+    datos_evento = [state.event_type, state.attendees, state.event_date, state.district]
+    return bool(
+        state.quote
+        or state.recommended_option
+        or state.requested_products
+        or (state.customer_name and sum(value not in (None, "", []) for value in datos_evento) >= 2)
+    )
 
 
 # Ejecuta la responsabilidad de renderizar respuesta previa encontrada.

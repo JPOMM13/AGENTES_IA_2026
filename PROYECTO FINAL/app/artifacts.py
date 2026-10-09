@@ -58,52 +58,56 @@ def refrescar_artefacto_visual_si_es_necesario(state: Any) -> str:
 # Ejecuta la responsabilidad de generar imagen multimodal evento.
 def generar_imagen_multimodal_evento(state: Any) -> str:
     """Llama al proveedor multimodal configurado y guarda un PNG del evento."""
-    config = obtener_configuracion_generacion_imagen()
-    if not config.listo:
-        state.registrar_log(
-            "generate_multimodal_event_image_skipped",
-            {"reason": "IMAGE_GENERATION_ENABLED apagado o API key no configurada"},
-        )
-        return ""
+    state.registrar_log("generar_imagen_multimodal_evento", {"mensaje": "IMAGEN MOCK NO GENERADA"})
+    return ""
 
-    prompt = construir_prompt_imagen_evento(state)
-    quote_id = state.quote.get("quote_id", "quote")
-    filename = f"{nombre_archivo_seguro(quote_id)}_{nombre_archivo_seguro(state.session_id[:8])}.png"
-    path = ARTIFACT_DIR / filename
-
-    try:
-        # MOCK: EN ESTA POC SOLO SE ENVIA EL PROMPT A OPENAI IMAGES.
-        # EN PRODUCCION EL PROMPT Y LA IMAGEN GENERADA PUEDEN AUDITARSE EN STORAGE/POSTGRES.
-        payload = {
-            "model": config.model,
-            "prompt": prompt,
-            "n": 1,
-            "size": config.size,
-            "quality": config.quality,
-        }
-        request = Request(
-            config.url_imagen,
-            data=json.dumps(payload).encode("utf-8"),
-            headers={
-                "Authorization": f"Bearer {config.api_key}",
-                "Content-Type": "application/json",
-            },
-            method="POST",
-        )
-        with urlopen(request, timeout=config.timeout_seconds) as response:
-            response_data = json.loads(response.read().decode("utf-8"))
-
-        b64_data = response_data["data"][0].get("b64_json")
-        if not b64_data:
-            state.registrar_log("generate_multimodal_event_image_empty", {"provider": config.provider})
-            return ""
-
-        path.write_bytes(base64.b64decode(b64_data))
-        state.registrar_log("generar_imagen_multimodal_evento", {"path": str(path), "provider": config.provider, "model": config.model})
-        return str(path)
-    except (HTTPError, URLError, TimeoutError, KeyError, ValueError) as exc:
-        state.registrar_log("generate_multimodal_event_image_error", {"error": str(exc), "provider": config.provider})
-        return ""
+    # CODIGO DESACTIVADO PARA PRUEBAS: DESCOMENTAR ESTE BLOQUE PARA VOLVER A CONSUMIR OPENAI IMAGES.
+    # config = obtener_configuracion_generacion_imagen()
+    # if not config.listo:
+    #     state.registrar_log(
+    #         "generate_multimodal_event_image_skipped",
+    #         {"reason": "IMAGE_GENERATION_ENABLED apagado o API key no configurada"},
+    #     )
+    #     return ""
+    #
+    # prompt = construir_prompt_imagen_evento(state)
+    # quote_id = state.quote.get("quote_id", "quote")
+    # filename = f"{nombre_archivo_seguro(quote_id)}_{nombre_archivo_seguro(state.session_id[:8])}.png"
+    # path = ARTIFACT_DIR / filename
+    #
+    # try:
+    #     # MOCK: EN ESTA POC SOLO SE ENVIA EL PROMPT A OPENAI IMAGES.
+    #     # EN PRODUCCION EL PROMPT Y LA IMAGEN GENERADA PUEDEN AUDITARSE EN STORAGE/POSTGRES.
+    #     payload = {
+    #         "model": config.model,
+    #         "prompt": prompt,
+    #         "n": 1,
+    #         "size": config.size,
+    #         "quality": config.quality,
+    #     }
+    #     request = Request(
+    #         config.url_imagen,
+    #         data=json.dumps(payload).encode("utf-8"),
+    #         headers={
+    #             "Authorization": f"Bearer {config.api_key}",
+    #             "Content-Type": "application/json",
+    #         },
+    #         method="POST",
+    #     )
+    #     with urlopen(request, timeout=config.timeout_seconds) as response:
+    #         response_data = json.loads(response.read().decode("utf-8"))
+    #
+    #     b64_data = response_data["data"][0].get("b64_json")
+    #     if not b64_data:
+    #         state.registrar_log("generate_multimodal_event_image_empty", {"provider": config.provider})
+    #         return ""
+    #
+    #     path.write_bytes(base64.b64decode(b64_data))
+    #     state.registrar_log("generar_imagen_multimodal_evento", {"path": str(path), "provider": config.provider, "model": config.model})
+    #     return str(path)
+    # except (HTTPError, URLError, TimeoutError, KeyError, ValueError) as exc:
+    #     state.registrar_log("generate_multimodal_event_image_error", {"error": str(exc), "provider": config.provider})
+    #     return ""
 
 
 # Ejecuta la responsabilidad de construir prompt imagen evento.

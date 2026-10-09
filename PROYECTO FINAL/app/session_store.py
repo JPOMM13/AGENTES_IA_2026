@@ -18,6 +18,8 @@ def guardar_estado_conversacion(state: QuoteState) -> None:
     # MOCK: ESTA MEMORIA ENTRE SESIONES DEBERIA GUARDARSE EN POSTGRESQL/NOSQL USANDO CONTACT COMO IDENTIFICADOR PRINCIPAL.
     if not state.contact:
         return
+    if not _tiene_datos_para_memoria_persistente(state):
+        return
 
     store = _leer_almacen()
     record = state.a_diccionario_persistido()
@@ -61,6 +63,22 @@ def _clave_identidad(customer_name: str, contact: str) -> str:
 def _clave_contacto(contact: str) -> str:
     """Normaliza telefono o correo para identificar al cliente."""
     return re.sub(r"\D+", "", contact.lower()) or contact.strip().lower()
+
+
+# Ejecuta logica interna para tiene datos para memoria persistente.
+def _tiene_datos_para_memoria_persistente(state: QuoteState) -> bool:
+    """Evita guardar busquedas vacias como si fueran cotizaciones previas."""
+    return any(
+        [
+            state.event_type,
+            state.attendees,
+            state.event_date,
+            state.district,
+            state.requested_products,
+            state.recommended_option,
+            state.quote,
+        ]
+    )
 
 
 # Ejecuta logica interna para leer almacen.
