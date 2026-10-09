@@ -28,13 +28,3 @@ def configurar_langsmith() -> None:
     os.environ.setdefault("LANGSMITH_PROJECT", project)
     os.environ.setdefault("LANGCHAIN_PROJECT", project)
     os.environ.setdefault("LANGSMITH_ENDPOINT", "https://api.smith.langchain.com")
-
-
-# Ejecuta la responsabilidad de langsmith activo.
-def langsmith_activo() -> bool:
-    """Indica si LangSmith esta configurado para enviar trazas."""
-    cargar_archivo_env()
-    return (
-        os.getenv("LANGSMITH_TRACING", "false").lower() in {"1", "true", "yes"}
-        and bool(os.getenv("LANGSMITH_API_KEY"))
-    )

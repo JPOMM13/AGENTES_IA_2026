@@ -51,14 +51,6 @@ def hidratar_estado(target: QuoteState, source: QuoteState) -> QuoteState:
     return QuoteState.desde_diccionario_persistido(restored)
 
 
-# Ejecuta logica interna para clave identidad.
-def _clave_identidad(customer_name: str, contact: str) -> str:
-    """Normaliza nombre y contacto para construir la clave de busqueda."""
-    normalized_name = re.sub(r"\s+", " ", customer_name.strip().lower())
-    normalized_contact = re.sub(r"\D+", "", contact.lower()) or contact.strip().lower()
-    return f"{normalized_name}|{normalized_contact}"
-
-
 # Ejecuta logica interna para clave contacto.
 def _clave_contacto(contact: str) -> str:
     """Normaliza telefono o correo para identificar al cliente."""

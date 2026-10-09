@@ -130,6 +130,13 @@ REGLAS IMPORTANTES:
   por coma. No pongas productos aqui.
 - Si el usuario quiere revisar, cambiar, agregar o quitar productos, usa
   intent_override=review_order o intent_override=modify_request.
+- Si el usuario dice que quiere otra/nueva cotizacion, otro numero, otro
+  contacto u otra persona, usa intent_override=new_quote.
+- Si el usuario dice que ya tuvo una sesion/conversacion anterior, que ya
+  conversaron, que ya dio/dejo todos sus datos, que ya dio datos antes aunque
+  escriba con errores como "enteriormente", o que quiere continuar lo anterior,
+  usa intent_override=resume_previous. No extraigas datos de evento desde esa
+  frase; primero se debe buscar memoria por telefono o correo.
 - Para modificar productos usa remove_products_csv, add_products_csv,
   replace_from_csv y replace_to_csv.
 - Si dice "cambialo por gaseosa" y hay un producto pendiente/no disponible en
@@ -210,7 +217,7 @@ def normalizar_campos_extraidos(payload: dict[str, Any], user_message: str) -> d
         fields["requested_products"] = requested_products
 
     intent_override = limpiar_texto(payload.get("intent_override")).lower()
-    if intent_override in {"modify_request", "review_order"}:
+    if intent_override in {"modify_request", "review_order", "resume_previous", "new_quote"}:
         fields["intent_override"] = intent_override
 
     product_changes = normalizar_cambios_productos(payload, user_message)

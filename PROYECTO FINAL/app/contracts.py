@@ -1,19 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Literal
-
-
-AgentAction = Literal[
-    "pedir_campos_faltantes",
-    "answer_price",
-    "validate_and_recommend",
-    "generate_quote",
-    "show_image",
-    "handoff",
-    "answer_policy",
-    "close",
-]
+from dataclasses import dataclass
 
 
 @dataclass(frozen=True)
@@ -33,17 +20,3 @@ class ToolReadinessContract:
             "can_generate_quote": self.can_generate_quote,
             "can_show_image": self.can_show_image,
         }
-
-
-@dataclass(frozen=True)
-class AgentDecisionContract:
-    """Contrato de salida esperado del agente decisor."""
-    action: AgentAction
-    reason: str = ""
-
-
-@dataclass(frozen=True)
-class ExtractedFieldsContract:
-    """Contrato de campos que pueden actualizar el estado conversacional."""
-    intent: str
-    fields: dict = field(default_factory=dict)

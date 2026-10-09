@@ -4,6 +4,7 @@ import re
 from datetime import date
 from typing import Any
 
+from app.guardrails.decision import es_solicitud_nueva_cotizacion, es_solicitud_recuperar_memoria
 from app.state import QuoteState
 
 
@@ -108,7 +109,12 @@ def extraer_intencion_y_campos(message: str, state: QuoteState) -> dict[str, Any
     fields = _fusionar_campos_agenticos(fields, agentic_fields)
     if fields.get("product_changes"):
         intent = "modify_request"
-    elif intent not in {"resume_previous", "memory_check", "greeting"} and fields.get("intent_override") in {"modify_request", "review_order"}:
+    elif intent not in {"resume_previous", "new_quote", "memory_check", "greeting"} and fields.get("intent_override") in {
+        "modify_request",
+        "review_order",
+        "resume_previous",
+        "new_quote",
+    }:
         intent = fields["intent_override"]
 
     return {"intent": intent, "fields": fields}
@@ -117,46 +123,12 @@ def extraer_intencion_y_campos(message: str, state: QuoteState) -> dict[str, Any
 # Ejecuta logica interna para detectar intencion.
 def _detectar_intencion(text: str, state: QuoteState) -> str:
     """Clasifica la intencion principal del usuario para dirigir el flujo."""
-    if any(
-        phrase in text
-        for phrase in [
-            "ya te di datos",
-            "ya te di mis datos",
-            "ya di mis datos",
-            "te di mis datos",
-            "ya te deje datos",
-            "ya te dejé datos",
-            "deje datos anteriormente",
-            "dejé datos anteriormente",
-            "datos anteriormente",
-            "otra session",
-            "otra sesión",
-            "session antes",
-            "sesion antes",
-            "sesión antes",
-            "sesion anterior",
-            "sesión anterior",
-            "interaccion anterior",
-            "interacción anterior",
-            "ya tuve una interaccion",
-            "ya tuve una interacción",
-            "conversacion que tuvimos",
-            "conversación que tuvimos",
-            "conversacion anterior",
-            "conversación anterior",
-            "seguir con la conversacion",
-            "seguir con la conversación",
-            "seguir con mi conversacion",
-            "seguir con mi conversación",
-            "deje algun dato",
-            "dejé algún dato",
-            "sabes cuales son",
-            "sabes cuáles son",
-        ]
-    ):
+    if es_solicitud_nueva_cotizacion(text):
+        return "new_quote"
+    if es_solicitud_recuperar_memoria(text):
         return "resume_previous"
     if any(term in text for term in ["retomar", "continuar", "seguir"]) and any(
-        term in text for term in ["cotizacion", "cotización", "pedido", "conversacion", "conversación", "solicitud"]
+        term in text for term in ["cotizacion", "cotización", "pedido", "conversacion", "conversación", "solicitud", "sesion", "sesión", "session", "datos"]
     ):
         return "resume_previous"
     if _es_solo_saludo(text):
@@ -187,7 +159,6 @@ def _detectar_intencion(text: str, state: QuoteState) -> str:
         return "general_question"
     return "recommendation"
 
-
 # Ejecuta logica interna para es solo saludo.
 def _es_solo_saludo(text: str) -> bool:
     """Distingue un saludo simple de una solicitud de cotizacion."""
@@ -203,6 +174,15 @@ def _es_solo_saludo(text: str) -> bool:
         "gaseosa",
         "hielo",
         "precio",
+        "datos",
+        "anterior",
+        "anteriormente",
+        "enteriormente",
+        "sesion",
+        "sesión",
+        "session",
+        "conversacion",
+        "conversación",
     ]
     greeting_signals = ["hola", "buenos dias", "buenos días", "buenas tardes", "buenas noches", "que tal", "qué tal"]
     return any(signal in cleaned for signal in greeting_signals) and not any(signal in cleaned for signal in quote_signals)

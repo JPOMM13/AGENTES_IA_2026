@@ -6,6 +6,7 @@ from app.state import QuoteState
 from app.data.mock_data import CATALOG, PRODUCTS
 from app.agentic_decider import decidir_siguiente_accion_con_agente, obtener_disponibilidad_tools, es_solicitud_derivacion_explicita
 from app.artifacts import generar_artefacto_visual_cotizacion
+from app.guardrails.decision import validar_decision_agentica
 from app.llm import pulir_respuesta
 from app.repositories import ActiveSessionRepository, QuoteMemoryRepository
 from app.tools.availability import mock_validar_disponibilidad, mock_validar_stock_productos
@@ -60,10 +61,12 @@ def resolver_memoria_y_elecciones_previas(user_message: str, state: QuoteState) 
 # Ejecuta la responsabilidad de decidir accion agentica turno.
 def decidir_accion_agentica_turno(user_message: str, state: QuoteState) -> QuoteState:
     """Usa create_agent para decidir accion de alto nivel cuando corresponde."""
-    agent_action = None if state.intent in {"greeting", "memory_check", "modify_request", "review_order"} else decidir_siguiente_accion_con_agente(user_message, state)
+    agent_action = decidir_siguiente_accion_con_agente(user_message, state)
     if agent_action:
         state.registrar_log("create_agent_decision", {"action": agent_action})
-        aplicar_accion_agente_a_intencion(agent_action, state, user_message)
+    accion_validada = validar_decision_agentica(agent_action, user_message, state)
+    if accion_validada:
+        aplicar_accion_agente_a_intencion(accion_validada, state, user_message)
     return state
 
 
@@ -203,6 +206,9 @@ def fusionar_extraccion_en_estado(state: QuoteState, extraction: dict) -> None:
     state.intent = extraction["intent"]
     state.product_change_cleared_unsupported = False
     fields = extraction.get("fields", {})
+    if state.intent == "new_quote":
+        limpiar_estado_para_nueva_cotizacion(state)
+        state.intent = "recommendation"
     if fields.get("product_changes"):
         aplicar_cambios_productos(state, fields["product_changes"])
 
@@ -241,6 +247,42 @@ def fusionar_extraccion_en_estado(state: QuoteState, extraction: dict) -> None:
         state.valid_options = []
         state.discarded_options = []
         state.dimensioning = None
+
+
+# Ejecuta la responsabilidad de limpiar estado para nueva cotizacion.
+def limpiar_estado_para_nueva_cotizacion(state: QuoteState) -> None:
+    """Limpia datos de negocio para iniciar otra cotizacion en la misma sesion."""
+    state.registrar_log("limpiar_estado_para_nueva_cotizacion", {"previous_contact": state.contact})
+    state.stage = "recoleccion"
+    state.event_type = None
+    state.attendees = None
+    state.event_date = None
+    state.partial_date = {"day": None, "month": None, "year": None}
+    state.district = None
+    state.budget = None
+    state.requested_products = []
+    state.unsupported_requested_products = []
+    state.stock_shortage_products = []
+    state.preferences = []
+    state.customer_name = None
+    state.contact = None
+    state.missing_fields = []
+    state.catalog_options = []
+    state.valid_options = []
+    state.discarded_options = []
+    state.recommended_option = None
+    state.dimensioning = None
+    state.quote = None
+    state.coverage_ok = None
+    state.availability_ok = None
+    state.policy_ok = None
+    state.handoff_offered = False
+    state.handoff_confirmed = False
+    state.handoff_summary = None
+    state.image_requested = False
+    state.quote_artifact_image = None
+    state.product_change_cleared_unsupported = False
+    state.pending_previous_state = None
 
 
 # Ejecuta la responsabilidad de detectar conversacion previa por contacto.
@@ -353,6 +395,8 @@ def aplicar_accion_agente_a_intencion(action: str, state: QuoteState, user_messa
         "show_image": "image_request",
         "answer_policy": "general_question",
         "close": "close",
+        "resume_previous": "resume_previous",
+        "new_quote": "recommendation",
     }
     if action == "handoff":
         if es_solicitud_derivacion_explicita(user_message):

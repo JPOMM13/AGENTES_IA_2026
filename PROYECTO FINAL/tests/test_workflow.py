@@ -4,6 +4,7 @@ import app.session_store as session_store
 import app.redis_session_store as redis_session_store
 import app.artifacts as artifacts
 import app.tools.extraction as extraction_tools
+import app.workflow as workflow
 
 
 # Prueba el comportamiento de test flujo recomendacion completo.
@@ -455,6 +456,126 @@ def test_datos_anteriores_y_seguir_conversacion_pide_contacto():
     assert "telefono o correo" in response
     assert "tipo de evento" not in response
     assert "cantidad de asistentes" not in response
+
+
+# Prueba que una frase natural de sesion previa pide contacto y no reinicia recoleccion.
+def test_ya_tuve_session_contigo_pide_contacto():
+    state = QuoteState()
+
+    response, state = manejar_mensaje("esta bien, yo ya tuve una session contigo y quiero continuarla", state)
+
+    assert state.intent == "resume_previous"
+    assert state.stage == "memoria_previa"
+    assert state.missing_fields == ["contact"]
+    assert "telefono o correo" in response
+    assert "tipo de evento" not in response
+    assert "cantidad de asistentes" not in response
+
+
+# Prueba que una variante natural de conversacion previa no caiga a recoleccion normal.
+def test_ya_tuvimos_session_y_di_todos_mis_datos_pide_contacto():
+    state = QuoteState()
+
+    response, state = manejar_mensaje("ya tuvimos una session te di todos mis datos", state)
+
+    assert state.intent == "resume_previous"
+    assert state.stage == "memoria_previa"
+    assert state.missing_fields == ["contact"]
+    assert "telefono o correo" in response
+    assert "cantidad de asistentes" not in response
+    assert "fecha y distrito" not in response
+
+
+# Prueba que un saludo con typo sobre datos anteriores no se trate como saludo simple.
+def test_hola_datos_enteriormente_pide_contacto_para_memoria():
+    state = QuoteState()
+
+    response, state = manejar_mensaje("Hola ya te dire mis datos enteriormente", state)
+
+    assert state.intent == "resume_previous"
+    assert state.stage == "memoria_previa"
+    assert state.missing_fields == ["contact"]
+    assert "telefono o correo" in response
+    assert "tipo de evento" not in response
+    assert "cantidad de asistentes" not in response
+
+
+# Prueba que reclamar datos ya dados en otra sesion mantiene la busqueda de memoria.
+def test_ya_te_di_esos_datos_pide_contacto_para_memoria():
+    state = QuoteState()
+
+    response, state = manejar_mensaje("te estoy diciendo que ya te di esos datos", state)
+
+    assert state.intent == "resume_previous"
+    assert state.stage == "memoria_previa"
+    assert state.missing_fields == ["contact"]
+    assert "telefono o correo" in response
+    assert "tipo de evento" not in response
+    assert "cantidad de asistentes" not in response
+
+
+# Prueba que el guardrail corrija una mala decision del agente decisor.
+def test_guardrail_decision_preserva_recuperacion_memoria(monkeypatch):
+    monkeypatch.setattr(
+        workflow,
+        "decidir_siguiente_accion_con_agente",
+        lambda user_message, state: "pedir_campos_faltantes",
+    )
+    state = QuoteState()
+
+    response, state = manejar_mensaje("esta bien, yo ya tuve una session contigo y quiero continuarla", state)
+
+    assert state.intent == "resume_previous"
+    assert state.stage == "memoria_previa"
+    assert state.missing_fields == ["contact"]
+    assert "telefono o correo" in response
+    assert "tipo de evento" not in response
+    assert "cantidad de asistentes" not in response
+
+
+# Prueba que si el LLM decisor falla, el guardrail posterior igual mantiene la intencion correcta.
+def test_fallback_si_llm_decisor_falla_en_recuperacion_memoria(monkeypatch):
+    monkeypatch.setattr(
+        workflow,
+        "decidir_siguiente_accion_con_agente",
+        lambda user_message, state: None,
+    )
+    state = QuoteState()
+
+    response, state = manejar_mensaje("ya tuvimos una session te di todos mis datos", state)
+
+    assert state.intent == "resume_previous"
+    assert state.stage == "memoria_previa"
+    assert state.missing_fields == ["contact"]
+    assert "telefono o correo" in response
+    assert "cantidad de asistentes" not in response
+
+
+# Prueba que pedir otra cotizacion limpie el contexto anterior.
+def test_otra_cotizacion_con_otro_numero_inicia_contexto_nuevo():
+    state = QuoteState()
+    _, state = manejar_mensaje(
+        "Soy John Manchego, mi telefono es 989515182. Necesito cerveza, agua y hielo para un matrimonio de 49 personas el 3 de marzo de 2027 en Miraflores",
+        state,
+    )
+    assert state.customer_name == "John Manchego"
+    assert state.contact == "989515182"
+    assert state.requested_products == ["cerveza", "agua", "hielo"]
+
+    response, state = manejar_mensaje("ahora quiero hacer otra cotizacion con otro numero", state)
+
+    assert state.customer_name is None
+    assert state.contact is None
+    assert state.event_type is None
+    assert state.attendees is None
+    assert state.event_date is None
+    assert state.district is None
+    assert state.requested_products == []
+    assert state.recommended_option is None
+    assert state.quote is None
+    assert "tipo de evento" in response
+    assert "cantidad de asistentes" in response
+    assert "cerveza" not in response.split("Memoria temporal")[0]
 
 
 # Prueba que el telefono posterior a una solicitud de recuperar memoria se usa para buscar memoria.

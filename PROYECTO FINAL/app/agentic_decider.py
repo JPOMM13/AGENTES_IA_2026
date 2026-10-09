@@ -5,6 +5,7 @@ from functools import lru_cache
 from typing import Literal
 
 from app.contracts import ToolReadinessContract
+from app.guardrails.decision import es_derivacion_humana_explicita, es_solicitud_nueva_cotizacion, es_solicitud_recuperar_memoria
 from app.guardrails.middleware import invocar_agente_con_guardrails, obtener_middleware_langchain_guardrails
 from app.llm_config import obtener_configuracion_llm
 from app.state import QuoteState
@@ -19,6 +20,8 @@ AgentDecision = Literal[
     "handoff",
     "answer_policy",
     "close",
+    "resume_previous",
+    "new_quote",
 ]
 
 
@@ -52,6 +55,8 @@ def decidir_siguiente_accion_con_agente(user_message: str, state: QuoteState) ->
                                 "missing_fields": state.missing_fields,
                                 "tool_readiness": readiness,
                                 "explicit_handoff_requested": es_solicitud_derivacion_explicita(user_message),
+                                "explicit_resume_requested": es_solicitud_recuperar_memoria(user_message.lower()),
+                                "explicit_new_quote_requested": es_solicitud_nueva_cotizacion(user_message.lower()),
                             },
                             ensure_ascii=False,
                         ),
@@ -92,9 +97,15 @@ def crear_agente_decisor():
         can_generate_quote: bool,
         can_show_image: bool,
         explicit_handoff_requested: bool = False,
+        explicit_resume_requested: bool = False,
+        explicit_new_quote_requested: bool = False,
     ) -> str:
         """Elige accion respetando prerequisitos minimos antes de usar tools."""
         text = user_message.lower()
+        if explicit_new_quote_requested:
+            return "new_quote"
+        if explicit_resume_requested:
+            return "resume_previous"
         if any(term in text for term in ["imagen", "foto", "visual"]):
             return "show_image" if can_show_image else "pedir_campos_faltantes"
         if explicit_handoff_requested:
@@ -121,8 +132,9 @@ Tu tarea NO es cotizar, NO es inventar datos y NO es responder comercialmente.
 Solo debes elegir una accion de alto nivel.
 
 CONTEXTO:
-- Recibiras user_message, state, missing_fields, tool_readiness y
-  explicit_handoff_requested.
+- Recibiras user_message, state, missing_fields, tool_readiness,
+  explicit_handoff_requested, explicit_resume_requested y
+  explicit_new_quote_requested.
 - state es memoria operativa de la cotizacion en curso.
 - tool_readiness indica si ya existen prerequisitos para usar herramientas de
   negocio.
@@ -131,7 +143,13 @@ REGLAS IMPORTANTES:
 - Usa la tool elegir_accion_workflow.
 - Devuelve exactamente una de estas acciones: pedir_campos_faltantes,
   answer_price, validate_and_recommend, generate_quote, show_image, handoff,
-  answer_policy, close.
+  answer_policy, close, resume_previous, new_quote.
+- Si el usuario indica que quiere otra/nueva cotizacion, otro numero, otro
+  contacto u otra persona, elige new_quote.
+- Si el usuario indica que ya tuvo una sesion/conversacion anterior, que ya
+  conversaron, que ya dio/dejo todos sus datos, que ya dio datos antes aunque
+  escriba con errores como "enteriormente", o que quiere continuar lo anterior,
+  elige resume_previous aunque no entregue telefono todavia.
 - validate_and_recommend solo si can_validate_and_recommend=true.
 - generate_quote solo si can_generate_quote=true.
 - answer_price solo si can_answer_price=true.
@@ -168,6 +186,8 @@ def normalizar_decision(content: str) -> AgentDecision | None:
         "handoff",
         "answer_policy",
         "close",
+        "resume_previous",
+        "new_quote",
     }
     text = content.strip().lower()
     for action in allowed:
@@ -220,19 +240,4 @@ def obtener_disponibilidad_tools(user_message: str, state: QuoteState) -> dict[s
 # Ejecuta la responsabilidad de es solicitud derivacion explicita.
 def es_solicitud_derivacion_explicita(message: str) -> bool:
     """Detecta si el usuario pidio de forma explicita derivacion humana."""
-    text = message.lower()
-    return any(
-        term in text
-        for term in [
-            "asesor",
-            "humano",
-            "whatsapp",
-            "derivame",
-            "derívame",
-            "pasame con alguien",
-            "pásame con alguien",
-            "hablar con alguien",
-            "atencion humana",
-            "atención humana",
-        ]
-    )
+    return es_derivacion_humana_explicita(message.lower())
