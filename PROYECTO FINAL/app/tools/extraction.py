@@ -104,7 +104,7 @@ def extraer_intencion_y_campos(message: str, state: QuoteState) -> dict[str, Any
     fields = _fusionar_campos_agenticos(fields, agentic_fields)
     if fields.get("product_changes"):
         intent = "modify_request"
-    elif fields.get("intent_override") in {"modify_request", "review_order"}:
+    elif intent not in {"resume_previous", "memory_check", "greeting"} and fields.get("intent_override") in {"modify_request", "review_order"}:
         intent = fields["intent_override"]
 
     return {"intent": intent, "fields": fields}
@@ -113,6 +113,41 @@ def extraer_intencion_y_campos(message: str, state: QuoteState) -> dict[str, Any
 # Ejecuta logica interna para detectar intencion.
 def _detectar_intencion(text: str, state: QuoteState) -> str:
     """Clasifica la intencion principal del usuario para dirigir el flujo."""
+    if any(
+        phrase in text
+        for phrase in [
+            "ya te di datos",
+            "ya te di mis datos",
+            "ya di mis datos",
+            "te di mis datos",
+            "ya te deje datos",
+            "ya te dejé datos",
+            "deje datos anteriormente",
+            "dejé datos anteriormente",
+            "datos anteriormente",
+            "otra session",
+            "otra sesión",
+            "sesion anterior",
+            "sesión anterior",
+            "interaccion anterior",
+            "interacción anterior",
+            "ya tuve una interaccion",
+            "ya tuve una interacción",
+            "conversacion que tuvimos",
+            "conversación que tuvimos",
+            "conversacion anterior",
+            "conversación anterior",
+            "seguir con la conversacion",
+            "seguir con la conversación",
+            "seguir con mi conversacion",
+            "seguir con mi conversación",
+            "deje algun dato",
+            "dejé algún dato",
+            "sabes cuales son",
+            "sabes cuáles son",
+        ]
+    ):
+        return "resume_previous"
     if any(term in text for term in ["retomar", "continuar", "seguir"]) and any(
         term in text for term in ["cotizacion", "cotización", "pedido", "conversacion", "conversación", "solicitud"]
     ):

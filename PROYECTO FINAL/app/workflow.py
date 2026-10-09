@@ -61,7 +61,7 @@ def manejar_mensaje(user_message: str, state: QuoteState) -> tuple[str, QuoteSta
 
     if state.intent == "resume_previous":
         response, state = manejar_retomar_previa(state)
-        return _finalizar(response, state, state.stage)
+        return _finalizar(response, state, "memoria_previa")
 
     if state.intent == "greeting":
         response = renderizar_respuesta_saludo(state)
@@ -752,15 +752,11 @@ def renderizar_respuesta_consulta_memoria(state: QuoteState) -> str:
 # Ejecuta la responsabilidad de manejar retomar previa.
 def manejar_retomar_previa(state: QuoteState) -> tuple[str, QuoteState]:
     """Retoma una cotizacion previa si el usuario confirma identidad."""
-    if not state.customer_name or not state.contact:
-        state.missing_fields = [
-            field
-            for field in ["customer_name", "contact"]
-            if getattr(state, field) in (None, "", [])
-        ]
+    if not state.contact:
+        state.missing_fields = ["contact"]
         return (
-            "Puedo intentar retomar una cotizacion anterior, pero necesito confirmar identidad. "
-            "Dime tu nombre y telefono o correo usado en la cotizacion.",
+            "Claro, puedo intentar buscar lo que quedo guardado de una cotizacion anterior. "
+            "Para ubicarla, dime por favor el telefono o correo que usaste en esa conversacion.",
             state,
         )
 
@@ -930,6 +926,8 @@ def renderizar_memoria_temporal(state: QuoteState) -> str:
         captured.append(f"preferencias: {', '.join(state.preferences)}")
 
     captured_text = "; ".join(captured) if captured else "sin datos capturados todavia"
+    if state.intent == "resume_previous" and not state.contact:
+        return f"_Tengo en memoria: {captured_text}. Siguiente por confirmar: telefono o correo para buscar la cotizacion anterior._"
     missing = encontrar_campos_faltantes(state)
     if missing:
         next_missing = priorizar_campos_faltantes(missing)

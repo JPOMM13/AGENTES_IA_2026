@@ -3,6 +3,7 @@ from app.workflow import manejar_mensaje
 import app.session_store as session_store
 import app.redis_session_store as redis_session_store
 import app.artifacts as artifacts
+import app.tools.extraction as extraction_tools
 
 
 # Prueba el comportamiento de test flujo recomendacion completo.
@@ -397,6 +398,63 @@ def test_contacto_coincidente_pregunta_antes_sobrescribir_cotizacion(monkeypatch
     assert resumed.session_id == current.session_id
     assert resumed.attendees == 45
     assert resumed.requested_products == ["cerveza", "vino"]
+
+
+# Prueba que una intencion de retomar sesion previa pida contacto para buscar memoria.
+def test_pide_telefono_para_buscar_datos_de_otra_sesion():
+    state = QuoteState()
+
+    response, state = manejar_mensaje("pero ya te di mis datos en otra session", state)
+
+    assert state.intent == "resume_previous"
+    assert state.missing_fields == ["contact"]
+    assert "telefono o correo" in response
+    assert "tipo de evento" not in response
+    assert "cantidad de asistentes" not in response
+
+
+# Prueba que la frase de continuar conversacion anterior pida contacto.
+def test_quiere_seguir_con_conversacion_anterior_pide_contacto():
+    state = QuoteState()
+
+    response, state = manejar_mensaje("Hola quiero seguir con la conversacion que tuvimos", state)
+
+    assert state.intent == "resume_previous"
+    assert state.missing_fields == ["contact"]
+    assert "telefono o correo" in response
+    assert "tipo de evento" not in response
+    assert "cantidad de asistentes" not in response
+
+
+# Prueba que retomar conversacion prevalece aunque el agente sugiera revisar pedido.
+def test_retomar_conversacion_no_se_convierte_en_revision_pedido(monkeypatch):
+    monkeypatch.setattr(
+        extraction_tools,
+        "_extraer_campos_con_agente",
+        lambda message, state: {"intent_override": "review_order"},
+    )
+    state = QuoteState()
+
+    response, state = manejar_mensaje("Hola quiero seguir con la conversacion que tuvimos", state)
+
+    assert state.intent == "resume_previous"
+    assert state.stage == "memoria_previa"
+    assert "telefono o correo" in response
+    assert "producto o servicio" not in response
+
+
+# Prueba que datos anteriores y seguir conversacion pida telefono/correo.
+def test_datos_anteriores_y_seguir_conversacion_pide_contacto():
+    state = QuoteState()
+
+    response, state = manejar_mensaje("Hola ya te deje datos anteriormente quiero seguir con mi conversacion", state)
+
+    assert state.intent == "resume_previous"
+    assert state.stage == "memoria_previa"
+    assert state.missing_fields == ["contact"]
+    assert "telefono o correo" in response
+    assert "tipo de evento" not in response
+    assert "cantidad de asistentes" not in response
 
 
 # Prueba el comportamiento de test sesion activa se guarda por session id.
