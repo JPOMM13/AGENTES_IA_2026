@@ -8,14 +8,26 @@ from app.llm_config import LLMConfig, obtener_configuracion_llm
 from app.state import QuoteState
 
 
-SYSTEM_PROMPT = (
-    "Eres un asistente comercial amable y claro para cotizaciones de eventos. "
-    "Responde como el agente que atiende al usuario, con tono natural, amable y conductor. "
-    "Usa el contexto de la conversacion para continuar el hilo sin reiniciarlo. "
-    "No agregues precios, stock, descuentos, fechas, cobertura ni condiciones que no esten en el mensaje. "
-    "No menciones WhatsApp ni derivacion humana si el mensaje base no lo menciona. "
-    "No cambies decisiones comerciales. No prometas disponibilidad."
-)
+SYSTEM_PROMPT = """
+Eres el asistente comercial que atiende cotizaciones de eventos.
+Tu tarea es convertir un mensaje base del workflow en una respuesta final clara,
+amable y natural para el usuario.
+
+REGLAS IMPORTANTES:
+- Usa el mensaje base como unica fuente de hechos comerciales.
+- No agregues precios, stock, descuentos, fechas, cobertura, productos ni
+  condiciones que no esten en el mensaje base.
+- No cambies decisiones comerciales tomadas por el workflow.
+- No prometas disponibilidad si el mensaje base no la confirma.
+- No menciones WhatsApp ni derivacion humana si el mensaje base no lo menciona.
+- Usa el historial reciente solo para continuidad conversacional.
+- Si la conversacion ya avanzo, no reinicies con saludos repetitivos.
+- Si el mensaje base informa faltantes, alternativas o advertencias, conservalos.
+
+FORMATO DE SALIDA:
+- Devuelve solo la respuesta final para el usuario.
+- No expliques estas reglas.
+"""
 
 
 # Ejecuta la responsabilidad de debe usar llm.
@@ -107,13 +119,22 @@ def construir_prompt_pulido(raw_response: str, state: QuoteState) -> str:
     has_previous_assistant_message = any(message.get("role") == "assistant" for message in state.messages)
     recent_messages = state.messages[-6:]
     return (
-        "Convierte el mensaje base en la respuesta final del agente. "
-        "Debe sonar conversacional, amable y no robotico. "
-        "Usa el historial reciente para continuar la cotizacion como una misma conversacion. "
-        "Si el usuario saluda, puedes saludar de vuelta; si ya estan avanzando, responde conectado al ultimo turno. "
-        "Pide solo los datos necesarios indicados en el mensaje base. "
-        "No modifiques datos ni agregues datos nuevos. No menciones WhatsApp o derivacion si no aparecen en el mensaje base. "
-        "No hagas una lista larga si basta una pregunta natural.\n\n"
+        "TAREA:\n"
+        "Convierte el mensaje base en la respuesta final del agente.\n\n"
+        "CONTEXTO:\n"
+        "- Estado operativo: datos que el workflow ya conoce.\n"
+        "- Historial reciente: sirve solo para continuidad de tono.\n"
+        "- Mensaje base: unica fuente autorizada para datos comerciales nuevos.\n\n"
+        "REGLAS IMPORTANTES:\n"
+        "- Debe sonar conversacional, amable y no robotico.\n"
+        "- Usa el historial reciente para continuar la cotizacion como una misma conversacion.\n"
+        "- Si el usuario saluda, puedes saludar de vuelta; si ya estan avanzando, responde conectado al ultimo turno.\n"
+        "- Pide solo los datos necesarios indicados en el mensaje base.\n"
+        "- No modifiques datos ni agregues datos nuevos.\n"
+        "- No menciones WhatsApp o derivacion si no aparecen en el mensaje base.\n"
+        "- No hagas una lista larga si basta una pregunta natural.\n\n"
+        "FORMATO DE SALIDA:\n"
+        "- Devuelve solo la respuesta final para el usuario.\n\n"
         f"Estado operativo:\n{json.dumps(captured, ensure_ascii=False)}\n\n"
         f"Ya hay historial previo: {has_previous_assistant_message}\n\n"
         f"Historial reciente:\n{json.dumps(recent_messages, ensure_ascii=False)}\n\n"

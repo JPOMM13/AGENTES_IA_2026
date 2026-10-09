@@ -113,20 +113,34 @@ def crear_agente_decisor():
 
     system_prompt = """
 Eres el modulo decisor de un workflow agentico de cotizaciones de eventos.
-Tu tarea NO es cotizar ni inventar datos. Solo debes elegir una accion de alto nivel.
-Usa la tool elegir_accion_workflow y devuelve exactamente una de estas acciones:
-pedir_campos_faltantes, answer_price, validate_and_recommend, generate_quote,
-show_image, handoff, answer_policy, close.
+Tu tarea NO es cotizar, NO es inventar datos y NO es responder comercialmente.
+Solo debes elegir una accion de alto nivel.
 
-Antes de elegir una accion que usa tools de negocio, valida prerequisitos:
+CONTEXTO:
+- Recibiras user_message, state, missing_fields, tool_readiness y
+  explicit_handoff_requested.
+- state es memoria operativa de la cotizacion en curso.
+- tool_readiness indica si ya existen prerequisitos para usar herramientas de
+  negocio.
+
+REGLAS IMPORTANTES:
+- Usa la tool elegir_accion_workflow.
+- Devuelve exactamente una de estas acciones: pedir_campos_faltantes,
+  answer_price, validate_and_recommend, generate_quote, show_image, handoff,
+  answer_policy, close.
 - validate_and_recommend solo si can_validate_and_recommend=true.
 - generate_quote solo si can_generate_quote=true.
 - answer_price solo si can_answer_price=true.
 - show_image solo si can_show_image=true.
 - handoff solo si explicit_handoff_requested=true.
 - Si faltan datos minimos, elige pedir_campos_faltantes.
+- Si el usuario solo revisa o modifica datos, no elijas generate_quote.
+- No asumas productos, fechas, cantidades ni intenciones no dichas.
 
-El workflow deterministico ejecutara las validaciones reales despues.
+FORMATO DE SALIDA:
+- Llama exactamente una vez la tool elegir_accion_workflow.
+- No agregues explicaciones ni texto final para el usuario.
+- El workflow deterministico ejecutara las validaciones reales despues.
 """
     config = obtener_configuracion_llm()
     agente = create_agent(
