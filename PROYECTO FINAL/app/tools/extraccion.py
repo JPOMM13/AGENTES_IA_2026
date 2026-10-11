@@ -409,8 +409,13 @@ def _extraer_productos_no_soportados(texto: str, productos_solicitados: list[str
         "whisky": ["whisky", "whiskey"],
         "pisco": ["pisco"],
         "champagne": ["champagne", "espumante"],
+        "tequila": ["tequila"],
+        "vodka": ["vodka"],
+        "gin": ["gin", "ginebra"],
         "jugo": ["jugo", "jugos"],
         "snacks": ["snack", "snacks", "piqueos", "bocaditos"],
+        "torta": ["torta", "tortas", "pastel"],
+        "comida": ["comida", "catering", "buffet"],
     }
     unsupported = []
     for canonical, aliases in unsupported_aliases.items():

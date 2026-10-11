@@ -35,6 +35,7 @@ class EstadoCotizacion:
     cotizacion: dict[str, Any] | None = None
 
     cobertura_ok: bool | None = None
+    calendario_ok: bool | None = None
     disponibilidad_ok: bool | None = None
     politica_ok: bool | None = None
 
@@ -75,6 +76,7 @@ class EstadoCotizacion:
             "errores_validacion_campos": self.errores_validacion_campos,
             "campos_faltantes": self.campos_faltantes,
             "cobertura_ok": self.cobertura_ok,
+            "calendario_ok": self.calendario_ok,
             "disponibilidad_ok": self.disponibilidad_ok,
             "recomendado": self.opcion_recomendada["name"] if self.opcion_recomendada else None,
             "total_cotizacion": self.cotizacion["total"] if self.cotizacion else None,
@@ -130,6 +132,7 @@ def normalizar_diccionario_estado(data: dict[str, Any]) -> dict[str, Any]:
         "dimensioning": "dimensionamiento",
         "quote": "cotizacion",
         "coverage_ok": "cobertura_ok",
+        "calendar_ok": "calendario_ok",
         "availability_ok": "disponibilidad_ok",
         "policy_ok": "politica_ok",
         "handoff_offered": "derivacion_ofrecida",

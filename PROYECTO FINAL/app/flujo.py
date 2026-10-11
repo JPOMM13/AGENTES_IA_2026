@@ -11,6 +11,7 @@ from app.llm import pulir_respuesta
 from app.repositorios import RepositorioSesionActiva, RepositorioMemoriaCotizacion
 from app.tools.disponibilidad import mock_validar_disponibilidad, mock_validar_stock_productos
 from app.tools.catalogo import mock_buscar_catalogo
+from app.tools.calendario import mock_registrar_evento_cotizado, mock_validar_calendario_eventos
 from app.tools.cobertura import mock_validar_cobertura
 from app.tools.dimensionamiento import mock_dimensionar_evento
 from app.tools.extraccion import extraer_intencion_y_campos
@@ -157,6 +158,13 @@ def ejecutar_decision_negocio(mensaje_usuario: str, estado: EstadoCotizacion) ->
         respuesta = renderizar_respuesta_sin_cobertura(estado, coverage)
         return respuesta, estado, "sin_cobertura"
 
+    calendario = mock_validar_calendario_eventos(estado)
+    estado.calendario_ok = calendario["ok"]
+    estado.registrar_log("mock_validar_calendario_eventos", calendario)
+    if not calendario["ok"]:
+        respuesta = renderizar_respuesta_fecha_ocupada(estado, calendario)
+        return respuesta, estado, "fecha_ocupada"
+
     catalog_result = mock_buscar_catalogo(estado)
     estado.opciones_catalogo = catalog_result["options"]
     estado.registrar_log("mock_product_catalog", {"products": catalog_result["products"]})
@@ -193,6 +201,8 @@ def ejecutar_decision_negocio(mensaje_usuario: str, estado: EstadoCotizacion) ->
     if estado.intencion == "cotizacion" or _parece_confirmacion_cotizacion(mensaje_usuario):
         estado.cotizacion = mock_generar_cotizacion(estado)
         estado.registrar_log("mock_generar_cotizacion", estado.cotizacion)
+        reserva_evento = mock_registrar_evento_cotizado(estado)
+        estado.registrar_log("mock_registrar_evento_cotizado", reserva_evento)
         estado.imagen_artefacto_cotizacion = generar_artefacto_visual_cotizacion(estado)
         estado.registrar_log("generar_artefacto_visual_cotizacion", {"path": estado.imagen_artefacto_cotizacion})
         respuesta = renderizar_respuesta_cotizacion(estado)
@@ -287,6 +297,7 @@ def limpiar_estado_para_nueva_cotizacion(estado: EstadoCotizacion) -> None:
     estado.dimensionamiento = None
     estado.cotizacion = None
     estado.cobertura_ok = None
+    estado.calendario_ok = None
     estado.disponibilidad_ok = None
     estado.politica_ok = None
     estado.derivacion_ofrecida = False
@@ -324,6 +335,16 @@ def manejar_eleccion_previa_pendiente(mensaje_usuario: str, estado: EstadoCotiza
     """Resuelve si el usuario quiere retomar lo previo o seguir con lo actual."""
     if not estado.estado_previo_pendiente:
         return None
+    if contacto_actual_cambio_frente_a_previo_pendiente(estado):
+        estado.registrar_log(
+            "previous_conversation_discarded_by_new_contact",
+            {
+                "contacto_actual": estado.contacto,
+                "contacto_previo": estado.estado_previo_pendiente.get("contacto"),
+            },
+        )
+        estado.estado_previo_pendiente = None
+        return None
     texto = mensaje_usuario.lower()
     wants_previous = any(term in texto for term in ["retomar", "anterior", "previa", "previo", "seguir con esa", "continua esa", "continúa esa"])
     wants_current = any(term in texto for term in ["nuevo", "nueva", "actual", "seguir con esta", "continua con esta", "continúa con esta"])
@@ -347,6 +368,15 @@ def manejar_eleccion_previa_pendiente(mensaje_usuario: str, estado: EstadoCotiza
         "Puedes decir `retomar la anterior` o `seguir con esta nueva`."
     )
     return respuesta, estado
+
+
+# GUARDRAIL DE MEMORIA: si cambia el telefono/correo, se descarta la previa pendiente y se busca con el nuevo identificador.
+def contacto_actual_cambio_frente_a_previo_pendiente(estado: EstadoCotizacion) -> bool:
+    """Evita retener una cotizacion previa cuando el usuario entrega otro contacto."""
+    if not estado.contacto or not estado.estado_previo_pendiente:
+        return False
+    contacto_previo = estado.estado_previo_pendiente.get("contacto")
+    return bool(contacto_previo and contacto_previo != estado.contacto)
 
 
 # MEMORIA TEMPORAL/PRODUCTOS: aplica agregar, quitar o reemplazar productos solicitados.
@@ -793,6 +823,17 @@ def renderizar_respuesta_sin_cobertura(estado: EstadoCotizacion, coverage: dict)
     )
 
 
+# RESPUESTA DE CALENDARIO: informa cruce de agenda antes de consultar catalogo o cotizar.
+def renderizar_respuesta_fecha_ocupada(estado: EstadoCotizacion, calendario: dict) -> str:
+    """Explica que la fecha/distrito ya tiene una reserva mock."""
+    estado.derivacion_ofrecida = False
+    return (
+        f"La fecha **{estado.fecha_evento}** para **{estado.distrito}** ya tiene una reserva mock registrada, "
+        "por eso no puedo avanzar con una cotizacion que cruce agenda. "
+        "Dime otra fecha o cambia el distrito y vuelvo a validar disponibilidad."
+    )
+
+
 # GUARDRAIL DE CAMPOS: informa datos invalidos antes de pedir faltantes o consultar tools de negocio.
 def renderizar_respuesta_validacion_campos(estado: EstadoCotizacion) -> str:
     """Explica errores de campos como fechas imposibles sin avanzar con datos invalidos."""
@@ -1163,8 +1204,13 @@ def productos_similares_para(product: str) -> list[str]:
         "ron": ["cerveza", "vino"],
         "pisco": ["vino"],
         "champagne": ["vino"],
+        "tequila": ["ron", "vino", "cerveza"],
+        "vodka": ["ron", "vino", "cerveza"],
+        "gin": ["ron", "vino", "cerveza"],
         "agua": ["gaseosa", "hielo"],
         "jugo": ["gaseosa"],
+        "torta": [],
+        "comida": [],
         "snacks": [],
     }
     return suggestions.get(product, [])

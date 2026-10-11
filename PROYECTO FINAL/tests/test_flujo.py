@@ -250,6 +250,23 @@ def test_producto_no_soportado_sugiere_similar_antes_cotizar():
     assert "productos disponibles" in respuesta
 
 
+# Prueba que un producto inexistente en catalogo active guardrail y alternativas parecidas.
+def test_producto_inexistente_sugiere_alternativas_por_categoria():
+    estado = EstadoCotizacion()
+    respuesta, estado = manejar_mensaje(
+        "Soy John Manchego, mi telefono es 989515182. Necesito tequila para un matrimonio de 34 personas el 25 de octubre en Miraflores",
+        estado,
+    )
+
+    assert "tequila" in respuesta
+    assert "no lo tengo en catalogo mock" in respuesta
+    assert "ron" in respuesta
+    assert "vino" in respuesta
+    assert "cerveza" in respuesta
+    assert estado.opcion_recomendada is None
+    assert estado.productos_solicitados_no_soportados == ["tequila"]
+
+
 # Prueba el comportamiento de test aceptar alternativa mantiene hilo sin derivacion.
 def test_aceptar_alternativa_mantiene_hilo_sin_derivacion():
     estado = EstadoCotizacion()
@@ -417,6 +434,27 @@ def test_cambio_implicito_reemplaza_producto_sin_stock():
     assert "Productos considerados" in respuesta
 
 
+# Prueba que una cotizacion generada registre agenda y bloquee cruce en la misma fecha/distrito.
+def test_calendario_mock_bloquea_cruce_despues_de_cotizar():
+    primera = EstadoCotizacion()
+    _, primera = manejar_mensaje(
+        "Soy Ana Torres, mi telefono es 999111222. Necesito cerveza para un matrimonio de 30 personas el 25 de octubre en Miraflores",
+        primera,
+    )
+    respuesta, primera = manejar_mensaje("genera la cotizacion", primera)
+    assert "Cotizacion mock" in respuesta
+
+    segunda = EstadoCotizacion()
+    respuesta, segunda = manejar_mensaje(
+        "Soy Luis Ramos, mi telefono es 999222333. Necesito vino para un matrimonio de 25 personas el 25 de octubre en Miraflores",
+        segunda,
+    )
+
+    assert segunda.calendario_ok is False
+    assert "ya tiene una reserva mock registrada" in respuesta
+    assert segunda.opcion_recomendada is None
+
+
 # Prueba el comportamiento de test puede retomar conversacion previa por identidad.
 def test_puede_retomar_conversacion_previa_por_identidad(monkeypatch, tmp_path):
     monkeypatch.setattr(session_store, "STORE_PATH", tmp_path / "mock_session_memory.json")
@@ -479,6 +517,35 @@ def test_contacto_coincidente_pregunta_antes_sobrescribir_cotizacion(monkeypatch
     assert retomado.id_sesion == current.id_sesion
     assert retomado.asistentes == 45
     assert retomado.productos_solicitados == ["cerveza", "vino"]
+
+
+# Prueba que si cambia el contacto, la memoria previa pendiente se descarta y se busca con el nuevo numero.
+def test_contacto_nuevo_descarta_previa_pendiente_y_no_pide_retomar(monkeypatch, tmp_path):
+    monkeypatch.setattr(session_store, "STORE_PATH", tmp_path / "mock_session_memory.json")
+    monkeypatch.setattr(redis_session_store, "REDIS_MOCK_PATH", tmp_path / "mock_redis_session.json")
+    previo = EstadoCotizacion()
+    _, previo = manejar_mensaje(
+        "Soy John Manchego, mi telefono es 989515182. Necesito cerveza y vino para un matrimonio de 45 personas el 23 de diciembre en Miraflores",
+        previo,
+    )
+
+    current = EstadoCotizacion()
+    respuesta, current = manejar_mensaje(
+        "Quiero una cotizacion para un evento de matrimonio, para 80 personas el 24 de febrero del 2027 en Miraflores, mi nombre es John Manchego y mi numero de celular es 989515182",
+        current,
+    )
+    assert "Encontre una cotizacion previa" in respuesta
+    assert current.estado_previo_pendiente is not None
+
+    respuesta, current = manejar_mensaje(
+        "Quiero una cotizacion para un evento de matrimonio, para 80 personas el 24 de febrero del 2027 en Miraflores, mi nombre es John Manchego y mi numero de celular es 989515151. Necesito cerveza",
+        current,
+    )
+
+    assert current.contacto == "989515151"
+    assert current.estado_previo_pendiente is None
+    assert "retomar la anterior" not in respuesta
+    assert "Encontre una cotizacion previa" not in respuesta
 
 
 # Prueba que una intencion de retomar sesion previa pida contacto para buscar memoria.
