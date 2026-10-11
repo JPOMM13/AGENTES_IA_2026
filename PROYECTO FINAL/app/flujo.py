@@ -352,6 +352,7 @@ def manejar_eleccion_previa_pendiente(mensaje_usuario: str, estado: EstadoCotiza
         previo = EstadoCotizacion.desde_diccionario_persistido(estado.estado_previo_pendiente)
         retomado = QUOTE_MEMORY.hidratar(estado, previo)
         retomado.estado_previo_pendiente = None
+        invalidar_cotizacion_recuperada_para_revalidar(retomado)
         retomado.campos_faltantes = encontrar_campos_faltantes(retomado)
         retomado.registrar_log("resume_previous_after_contact_match", {"contacto": retomado.contacto})
         return renderizar_respuesta_previa_retomada(retomado), retomado
@@ -946,6 +947,7 @@ def manejar_retomar_previa(estado: EstadoCotizacion) -> tuple[str, EstadoCotizac
         )
 
     retomado = QUOTE_MEMORY.hidratar(estado, previo)
+    invalidar_cotizacion_recuperada_para_revalidar(retomado)
     retomado.registrar_log(
         "resume_previous_conversation",
         {"nombre_cliente": retomado.nombre_cliente, "contacto": retomado.contacto, "resumed_session_id": previo.id_sesion},
@@ -958,6 +960,25 @@ def manejar_retomar_previa(estado: EstadoCotizacion) -> tuple[str, EstadoCotizac
         f"{renderizar_respuesta_revision_pedido(retomado)}"
     )
     return respuesta, retomado
+
+
+# GUARDRAIL DE CALENDARIO: al retomar una cotizacion previa, obliga a recalcular antes de mostrar totales.
+def invalidar_cotizacion_recuperada_para_revalidar(estado: EstadoCotizacion) -> None:
+    """Conserva datos retomados, pero borra cotizacion/imagen para revalidar calendario y disponibilidad."""
+    if not estado.cotizacion and not estado.imagen_artefacto_cotizacion:
+        return
+    estado.registrar_log(
+        "cotizacion_recuperada_invalidada_para_revalidar",
+        {
+            "quote_id_previo": (estado.cotizacion or {}).get("quote_id"),
+            "fecha_evento": estado.fecha_evento,
+            "distrito": estado.distrito,
+        },
+    )
+    estado.cotizacion = None
+    estado.imagen_artefacto_cotizacion = None
+    estado.calendario_ok = None
+    estado.disponibilidad_ok = None
 
 
 # VALIDACION DE MEMORIA: verifica si una cotizacion recuperada tiene datos suficientes para retomarse.
@@ -988,7 +1009,8 @@ def renderizar_respuesta_previa_encontrada(estado: EstadoCotizacion, previo: Est
 def renderizar_respuesta_previa_retomada(estado: EstadoCotizacion) -> str:
     """Confirma que se cargo la cotizacion previa en la sesion actual."""
     return (
-        f"Listo, retome la cotizacion previa asociada al contacto **{estado.contacto}**.\n\n"
+        f"Listo, retome los datos de la cotizacion previa asociada al contacto **{estado.contacto}**. "
+        "Antes de emitir una nueva cotizacion voy a volver a validar calendario, cobertura, catalogo y stock.\n\n"
         f"{renderizar_respuesta_revision_pedido(estado)}"
     )
 

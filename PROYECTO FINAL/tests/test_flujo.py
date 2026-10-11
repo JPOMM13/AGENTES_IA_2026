@@ -2,6 +2,7 @@ from app.estado import EstadoCotizacion
 from app.flujo import manejar_mensaje
 import app.almacen_sesion as session_store
 import app.almacen_sesion_redis as redis_session_store
+import app.almacen_calendario as calendar_store
 import app.artefactos as artifacts
 import app.tools.extraccion as extraction_tools
 import app.flujo as workflow
@@ -513,10 +514,43 @@ def test_contacto_coincidente_pregunta_antes_sobrescribir_cotizacion(monkeypatch
     assert current.estado_previo_pendiente is not None
 
     respuesta, retomado = manejar_mensaje("retomar la anterior", current)
-    assert "retome la cotizacion previa" in respuesta
+    assert "retome los datos de la cotizacion previa" in respuesta
     assert retomado.id_sesion == current.id_sesion
     assert retomado.asistentes == 45
     assert retomado.productos_solicitados == ["cerveza", "vino"]
+
+
+# Prueba que una cotizacion retomada no muestre totales antiguos y revalide calendario antes de emitir.
+def test_retomar_cotizacion_previa_obliga_revalidar_calendario(monkeypatch, tmp_path):
+    monkeypatch.setattr(session_store, "STORE_PATH", tmp_path / "mock_session_memory.json")
+    monkeypatch.setattr(redis_session_store, "REDIS_MOCK_PATH", tmp_path / "mock_redis_session.json")
+    monkeypatch.setattr(calendar_store, "CALENDARIO_MOCK_PATH", tmp_path / "mock_calendario_eventos.json")
+
+    previo = EstadoCotizacion()
+    _, previo = manejar_mensaje(
+        "Soy John Manchego, mi telefono es 989515182. Necesito vino y hielo para un matrimonio de 40 personas el 24 de febrero de 2027 en Miraflores",
+        previo,
+    )
+    respuesta, previo = manejar_mensaje("genera la cotizacion", previo)
+    assert "Cotizacion mock" in respuesta
+    assert previo.cotizacion is not None
+
+    actual = EstadoCotizacion()
+    _, actual = manejar_mensaje(
+        "Quiero una cotizacion para un evento de matrimonio, para 150 personas, para el 24 de febrero del 2027 en Miraflores, mi nombre es John Manchego y mi numero de celular es 989515182",
+        actual,
+    )
+    respuesta, actual = manejar_mensaje("retomar la anterior", actual)
+
+    assert "volver a validar calendario" in respuesta
+    assert actual.cotizacion is None
+    assert actual.imagen_artefacto_cotizacion is None
+
+    respuesta, actual = manejar_mensaje("genera la cotizacion", actual)
+
+    assert actual.calendario_ok is False
+    assert "ya tiene una reserva mock registrada" in respuesta
+    assert actual.cotizacion is None
 
 
 # Prueba que si cambia el contacto, la memoria previa pendiente se descarta y se busca con el nuevo numero.
