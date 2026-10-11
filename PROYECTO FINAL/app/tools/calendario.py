@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 from datetime import datetime
+from uuid import uuid4
 
-from app.almacen_calendario import cargar_reservas_eventos, upsert_reserva_evento
+from app.almacen_calendario import agregar_reserva_evento, cargar_reservas_eventos
 from app.data.datos_mock import MAX_EVENTOS_POR_DISTRITO_DIA
 from app.estado import EstadoCotizacion
 
@@ -21,7 +22,6 @@ def mock_validar_calendario_eventos(estado: EstadoCotizacion) -> dict:
         for reserva in reservas
         if reserva.get("fecha_evento") == estado.fecha_evento
         and str(reserva.get("distrito", "")).strip().lower() == distrito_normalizado
-        and reserva.get("id_sesion") != estado.id_sesion
     ]
     ok = len(reservas_cruzadas) < MAX_EVENTOS_POR_DISTRITO_DIA
     return {
@@ -39,6 +39,7 @@ def mock_registrar_evento_cotizado(estado: EstadoCotizacion) -> dict:
     """Guarda la reserva mock cuando se genera una cotizacion."""
     # MOCK: EN PRODUCCION ESTO DEBERIA INSERTAR/ACTUALIZAR UNA RESERVA EN POSTGRESQL DENTRO DE UNA TRANSACCION.
     reserva = {
+        "id_reserva": f"R-POC-{uuid4().hex[:8].upper()}",
         "id_sesion": estado.id_sesion,
         "quote_id": (estado.cotizacion or {}).get("quote_id"),
         "nombre_cliente": estado.nombre_cliente,
@@ -50,5 +51,5 @@ def mock_registrar_evento_cotizado(estado: EstadoCotizacion) -> dict:
         "productos_solicitados": list(estado.productos_solicitados),
         "registrado_en": datetime.now().replace(microsecond=0).isoformat(),
     }
-    upsert_reserva_evento(reserva)
+    agregar_reserva_evento(reserva)
     return reserva

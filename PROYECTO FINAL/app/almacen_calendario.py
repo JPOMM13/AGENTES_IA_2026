@@ -28,10 +28,9 @@ def guardar_reservas_eventos(reservas: list[dict[str, Any]]) -> None:
     CALENDARIO_MOCK_PATH.write_text(json.dumps(reservas, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
-# MOCK/CALENDARIO: registra o actualiza la reserva asociada a una sesion/cotizacion.
-def upsert_reserva_evento(reserva: dict[str, Any]) -> None:
-    """Inserta o actualiza una reserva usando id_sesion como identificador."""
+# MOCK/CALENDARIO: registra una nueva reserva como una fila independiente de calendario.
+def agregar_reserva_evento(reserva: dict[str, Any]) -> None:
+    """Inserta una nueva reserva sin reemplazar otras cotizaciones de la misma sesion."""
     reservas = cargar_reservas_eventos()
-    reservas = [item for item in reservas if item.get("id_sesion") != reserva.get("id_sesion")]
     reservas.append(reserva)
     guardar_reservas_eventos(reservas)

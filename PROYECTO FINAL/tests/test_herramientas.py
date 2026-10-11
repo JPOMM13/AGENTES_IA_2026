@@ -5,6 +5,8 @@ from app.tools.disponibilidad import mock_validar_stock_productos
 from app.tools.catalogo import mock_buscar_catalogo
 from app.tools.cobertura import mock_validar_cobertura
 from app.tools.dimensionamiento import mock_dimensionar_evento
+from app.tools.calendario import mock_registrar_evento_cotizado, mock_validar_calendario_eventos
+from app.almacen_calendario import cargar_reservas_eventos
 
 
 # Prueba el comportamiento de test catalogo encuentra opcion matrimonio.
@@ -66,3 +68,54 @@ def test_disponibilidad_tools_permite_precio_informativo_producto():
     estado = EstadoCotizacion(campos_faltantes=["fecha_evento", "distrito", "nombre_cliente"])
     disponibilidad = obtener_disponibilidad_tools("cuanto cuesta el vino", estado)
     assert disponibilidad["puede_responder_precio"] is True
+
+
+# Prueba el comportamiento de test calendario agrega reservas sin reemplazar misma sesion.
+def test_calendario_agrega_reservas_sin_reemplazar_misma_sesion():
+    estado = EstadoCotizacion(
+        tipo_evento="matrimonio",
+        asistentes=30,
+        fecha_evento="2027-02-24",
+        distrito="Miraflores",
+        nombre_cliente="Ana Torres",
+        contacto="999111222",
+        cotizacion={"quote_id": "Q-POC-A"},
+    )
+    mock_registrar_evento_cotizado(estado)
+
+    estado.fecha_evento = "2027-02-25"
+    estado.contacto = "999333444"
+    estado.cotizacion = {"quote_id": "Q-POC-B"}
+    mock_registrar_evento_cotizado(estado)
+
+    reservas = cargar_reservas_eventos()
+    assert len(reservas) == 2
+    assert {reserva["fecha_evento"] for reserva in reservas} == {"2027-02-24", "2027-02-25"}
+
+
+# Prueba el comportamiento de test calendario bloquea cruce aunque sea misma sesion.
+def test_calendario_bloquea_cruce_aunque_sea_misma_sesion():
+    estado = EstadoCotizacion(
+        tipo_evento="matrimonio",
+        asistentes=30,
+        fecha_evento="2027-02-24",
+        distrito="Miraflores",
+        nombre_cliente="Ana Torres",
+        contacto="999111222",
+        cotizacion={"quote_id": "Q-POC-A"},
+    )
+    mock_registrar_evento_cotizado(estado)
+
+    nueva_cotizacion = EstadoCotizacion(
+        id_sesion=estado.id_sesion,
+        tipo_evento="cumpleanos",
+        asistentes=20,
+        fecha_evento="2027-02-24",
+        distrito="Miraflores",
+        nombre_cliente="Luis Ramos",
+        contacto="999333444",
+    )
+    resultado = mock_validar_calendario_eventos(nueva_cotizacion)
+
+    assert resultado["ok"] is False
+    assert len(resultado["reservas_cruzadas"]) == 1
