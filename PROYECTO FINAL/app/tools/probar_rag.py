@@ -13,7 +13,8 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from dotenv import load_dotenv
 from openai import OpenAI
-from app.tools.retriever import retrieve_chunks
+# from app.tools.retriever import retrieve_chunks  # Supabase
+from app.tools.retriever_gcp import retrieve_chunks  # GCP
 
 load_dotenv()
 
