@@ -9,10 +9,9 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from app.state import QuoteState
-from app.repositories import ActiveSessionRepository
-from app.ui.components import renderizar_tarjeta_imagen, renderizar_tarjeta_cotizacion, renderizar_panel_estado
-from app.workflow import manejar_mensaje
+from app.cliente_api import ErrorApiCotizador, consultar_sesion_api, crear_sesion_api, enviar_mensaje_api, reiniciar_sesion_api
+from app.estado import EstadoCotizacion
+from app.ui.componentes import renderizar_tarjeta_imagen, renderizar_tarjeta_cotizacion, renderizar_panel_estado
 
 
 st.set_page_config(page_title="Workflow agentico de eventos", page_icon="WF", layout="wide")
@@ -20,25 +19,40 @@ st.set_page_config(page_title="Workflow agentico de eventos", page_icon="WF", la
 st.title("Workflow agentico para cotizacion de eventos")
 st.caption("POC local con catalogo, cobertura, disponibilidad, RAG y cotizacion mockeados.")
 
-active_sessions = ActiveSessionRepository()
 
-if "quote_state" not in st.session_state:
-    st.session_state.quote_state = QuoteState()
-else:
-    restored_state = active_sessions.obtener(st.session_state.quote_state.session_id)
-    if restored_state:
-        st.session_state.quote_state = restored_state
+# FRONTEND STREAMLIT: esta capa solo renderiza y conversa con FastAPI por HTTP.
+def cargar_estado_desde_respuesta(respuesta_api: dict) -> EstadoCotizacion:
+    """Reconstruye el estado para que los componentes visuales actuales puedan renderizar."""
+    return EstadoCotizacion.desde_diccionario_persistido(respuesta_api["estado"])
 
-state: QuoteState = st.session_state.quote_state
+
+try:
+    if "id_sesion" not in st.session_state:
+        respuesta_inicial = crear_sesion_api()
+        st.session_state.id_sesion = respuesta_inicial["id_sesion"]
+        st.session_state.estado_api = respuesta_inicial["estado"]
+    else:
+        respuesta_actual = consultar_sesion_api(st.session_state.id_sesion)
+        st.session_state.estado_api = respuesta_actual["estado"]
+except ErrorApiCotizador as error:
+    st.error(str(error))
+    st.info("Levanta primero el backend con: uvicorn app.api:aplicacion --reload --port 8000")
+    st.stop()
+
+estado: EstadoCotizacion = cargar_estado_desde_respuesta({"estado": st.session_state.estado_api})
 
 if st.sidebar.button("Reiniciar conversacion"):
-    active_sessions.reiniciar(state.session_id)
-    st.session_state.quote_state = QuoteState()
+    try:
+        respuesta_reinicio = reiniciar_sesion_api(estado.id_sesion)
+        st.session_state.id_sesion = respuesta_reinicio["id_sesion"]
+        st.session_state.estado_api = respuesta_reinicio["estado"]
+    except ErrorApiCotizador as error:
+        st.error(str(error))
     st.rerun()
 
-renderizar_panel_estado(state)
+renderizar_panel_estado(estado)
 
-for message in state.messages:
+for message in estado.mensajes:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
@@ -46,14 +60,18 @@ prompt = st.chat_input("Ej.: Necesito bebidas para un matrimonio de 100 personas
 if prompt:
     with st.chat_message("user"):
         st.markdown(prompt)
-    response, updated_state = manejar_mensaje(prompt, state)
-    st.session_state.quote_state = updated_state
-    with st.chat_message("assistant"):
-        st.markdown(response)
+    try:
+        respuesta_api = enviar_mensaje_api(estado.id_sesion, prompt)
+        st.session_state.id_sesion = respuesta_api["id_sesion"]
+        st.session_state.estado_api = respuesta_api["estado"]
+        with st.chat_message("assistant"):
+            st.markdown(respuesta_api["respuesta"])
+    except ErrorApiCotizador as error:
+        st.error(str(error))
     st.rerun()
 
-renderizar_tarjeta_cotizacion(state)
-renderizar_tarjeta_imagen(state)
+renderizar_tarjeta_cotizacion(estado)
+renderizar_tarjeta_imagen(estado)
 
 with st.expander("Guia rapida"):
     st.markdown(

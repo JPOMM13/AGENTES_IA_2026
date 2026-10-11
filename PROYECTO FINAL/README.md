@@ -12,16 +12,44 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-## Ejecutar
+## Ejecutar frontend y backend
+
+La POC ahora esta separada en dos procesos:
+
+- Backend FastAPI: expone el agente por HTTP.
+- Frontend Streamlit: solo renderiza la UI y llama al backend.
+
+Primero levanta el backend:
 
 ```bash
-streamlit run app/main.py
+uvicorn app.api:aplicacion --reload --port 8000
+```
+
+Luego, en otra terminal con el mismo entorno virtual activo, levanta Streamlit:
+
+```bash
+streamlit run frontend/main.py
 ```
 
 Luego abre la URL local que muestre Streamlit, normalmente:
 
 ```text
 http://localhost:8501
+```
+
+Si quieres usar otro puerto o host para la API, configura:
+
+```bash
+export COTIZADOR_API_URL="http://127.0.0.1:8000"
+```
+
+Probar el backend directamente:
+
+```bash
+curl -X POST http://127.0.0.1:8000/api/sesiones
+curl -X POST http://127.0.0.1:8000/api/chat \
+  -H "Content-Type: application/json" \
+  -d '{"id_sesion":"ID_DEVUELTO_POR_API","mensaje":"Necesito cotizar un matrimonio para 50 personas"}'
 ```
 
 ## Pruebas sugeridas

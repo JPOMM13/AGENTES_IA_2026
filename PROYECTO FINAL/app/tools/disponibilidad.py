@@ -1,0 +1,104 @@
+from __future__ import annotations
+
+from datetime import date, datetime, timedelta
+
+from app.data.datos_mock import AVAILABILITY, DEFAULT_PRODUCT_STOCK, PRODUCT_CATEGORIES
+from app.estado import EstadoCotizacion
+
+
+# TOOL MOCK/DISPONIBILIDAD: valida cupos de paquetes/servicios para la fecha solicitada.
+def mock_validar_disponibilidad(estado: EstadoCotizacion, options: list[dict]) -> dict:
+    """Valida disponibilidad mock de paquetes para la fecha solicitada."""
+    # MOCK: ESTA TOOL DEBERIA CONSULTAR DISPONIBILIDAD REAL EN EL SISTEMA DE RESERVAS/CALENDARIO O EN UNA TABLA TRANSACCIONAL DE CUPOS POR FECHA.
+    available_options = []
+    opciones_descartadas = []
+
+    if not estado.fecha_evento:
+        return {"available_options": [], "opciones_descartadas": options}
+
+    fecha_evento = datetime.fromisoformat(estado.fecha_evento).date()
+    if fecha_evento < date.today() + timedelta(hours=72):
+        return {
+            "available_options": [],
+            "opciones_descartadas": [{"option": option, "reason": "No cumple anticipacion minima de 72 horas."} for option in options],
+        }
+
+    day_availability = AVAILABILITY.get(estado.fecha_evento, {})
+    for option in options:
+        cupos = day_availability.get(option["id"], 1)
+        if cupos > 0:
+            enriched = option.copy()
+            enriched["available_slots"] = cupos
+            available_options.append(enriched)
+        else:
+            opciones_descartadas.append({"option": option, "reason": "Sin disponibilidad para la fecha solicitada."})
+
+    return {"available_options": available_options, "opciones_descartadas": opciones_descartadas}
+
+
+# TOOL MOCK/STOCK: valida inventario por producto y propone alternativas por categoria.
+def mock_validar_stock_productos(estado: EstadoCotizacion, requested_items: list[dict], products: list[dict]) -> dict:
+    """Valida stock mock por producto y calcula faltantes con alternativas."""
+    # MOCK: ESTA TOOL DEBERIA CONSULTAR STOCK REAL EN INVENTARIO, ERP O TABLAS TRANSACCIONALES DE DISPONIBILIDAD POR PRODUCTO Y FECHA.
+    if not estado.fecha_evento:
+        return {"available_items": [], "missing_items": requested_items}
+
+    day_availability = {**DEFAULT_PRODUCT_STOCK, **AVAILABILITY.get(estado.fecha_evento, {})}
+    product_by_category = {product["category"]: product for product in products}
+    available_items = []
+    missing_items = []
+
+    for item in requested_items:
+        product = product_by_category.get(item["concept"])
+        if not product:
+            missing_items.append({**item, "reason": "No existe producto mock para este concepto."})
+            continue
+        stock = day_availability.get(product["id"], 0)
+        if stock >= item["quantity"]:
+            available_items.append({**item, "product": product, "stock": stock})
+        else:
+            missing_items.append(
+                {
+                    **item,
+                    "product": product,
+                    "stock": stock,
+                    "reason": "Stock insuficiente.",
+                    "alternatives": buscar_alternativas_producto_disponibles(item, products, day_availability),
+                }
+            )
+
+    return {"available_items": available_items, "missing_items": missing_items}
+
+
+# TOOL MOCK/STOCK: busca productos sustitutos disponibles cuando falta stock del pedido exacto.
+def buscar_alternativas_producto_disponibles(item: dict, products: list[dict], day_availability: dict) -> list[dict]:
+    """Busca alternativas de la misma familia con stock disponible."""
+    alternatives = []
+    product_by_category = {product["category"]: product for product in products}
+    for category in categorias_alternativas_para(item["concept"]):
+        product = product_by_category.get(category)
+        if not product:
+            continue
+        stock = day_availability.get(product["id"], 0)
+        if stock <= 0:
+            continue
+        alternatives.append(
+            {
+                "category": category,
+                "product": product,
+                "stock": stock,
+                "suggested_quantity": min(item["quantity"], stock),
+            }
+        )
+    return alternatives
+
+
+# TOOL MOCK/CATALOGO: define categorias cercanas para sugerir alternativas sin inventar productos.
+def categorias_alternativas_para(category: str) -> list[str]:
+    """Devuelve categorias alternativas configuradas para un producto."""
+    for config in PRODUCT_CATEGORIES.values():
+        if category in config.get("alternatives", {}):
+            return config["alternatives"][category]
+        if category in config.get("categories", []):
+            return [candidate for candidate in config["categories"] if candidate != category]
+    return []

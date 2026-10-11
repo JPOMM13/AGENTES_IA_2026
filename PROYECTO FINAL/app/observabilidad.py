@@ -1,0 +1,30 @@
+from __future__ import annotations
+
+import os
+
+from app.configuracion_llm import cargar_archivo_env
+
+
+# RESUMEN: ESTE MODULO CENTRALIZA LA CONFIGURACION DE OBSERVABILIDAD.
+# RESUMEN: SI LANGSMITH_TRACING=true Y EXISTE LANGSMITH_API_KEY, LANGCHAIN
+# Y LANGGRAPH ENVIAN TRAZAS A LANGSMITH AUTOMATICAMENTE.
+
+
+# OBSERVABILIDAD: configura LangSmith para trazar nodos, agentes y llamadas del workflow.
+def configurar_langsmith() -> None:
+    """Carga variables de entorno y habilita aliases compatibles de LangSmith."""
+    cargar_archivo_env()
+    tracing_enabled = os.getenv("LANGSMITH_TRACING", "false").lower() in {"1", "true", "yes"}
+    api_key = os.getenv("LANGSMITH_API_KEY", "")
+    project = os.getenv("LANGSMITH_PROJECT", "workflow-agentico-cotizador-eventos")
+
+    if not tracing_enabled or not api_key:
+        os.environ["LANGSMITH_TRACING"] = "false"
+        os.environ["LANGCHAIN_TRACING_V2"] = "false"
+        return
+
+    os.environ["LANGSMITH_TRACING"] = "true"
+    os.environ["LANGCHAIN_TRACING_V2"] = "true"
+    os.environ.setdefault("LANGSMITH_PROJECT", project)
+    os.environ.setdefault("LANGCHAIN_PROJECT", project)
+    os.environ.setdefault("LANGSMITH_ENDPOINT", "https://api.smith.langchain.com")
