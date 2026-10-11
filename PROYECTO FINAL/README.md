@@ -1,8 +1,8 @@
 # POC - Workflow agentico para cotizaciones de eventos
 
-Esta POC implementa un workflow agentico conversacional para recomendar y cotizar eventos con datos mockeados.
+Esta POC implementa un workflow agentico conversacional para recomendar y cotizar eventos.
 
-No usa PostgreSQL, pgvector, NoSQL, Redis ni WhatsApp real. Todo el catalogo, cobertura, disponibilidad, RAG y cotizacion son mocks locales.
+El agente conversa con LangGraph y tools de negocio. La capa de datos de negocio puede usar PostgreSQL para catalogo, productos, stock, cobertura, RAG mock y calendario de eventos. Redis, NoSQL y WhatsApp real siguen mockeados para fases futuras.
 
 ## Instalacion
 
@@ -52,7 +52,92 @@ curl -X POST http://127.0.0.1:8000/api/chat \
   -d '{"id_sesion":"ID_DEVUELTO_POR_API","mensaje":"Necesito cotizar un matrimonio para 50 personas"}'
 ```
 
+## PostgreSQL para datos de negocio
+
+La base PostgreSQL ya debe existir con el nombre `eventos`. Esta migracion solo reemplaza los datos de negocio que antes salian de `app/data/datos_mock.py` y `app/data/mock_calendario_eventos.json`.
+
+No se migran en esta fase:
+
+- `app/data/mock_redis_session.json`: representa Redis futuro para memoria corta por `session_id`.
+- `app/data/mock_session_memory.json`: representa memoria persistente/NoSQL futura para retomar cotizaciones.
+
+Configura `.env`:
+
+```env
+BUSINESS_DATA_SOURCE=postgres
+POSTGRES_HOST=localhost
+POSTGRES_PORT=5432
+POSTGRES_DB=eventos
+POSTGRES_SCHEMA=negocio
+POSTGRES_USER=tu_usuario
+POSTGRES_PASSWORD=tu_password
+```
+
+Si tu servidor PostgreSQL exige SSL o certificado cliente, agrega tambien:
+
+```env
+POSTGRES_SSLMODE=require
+POSTGRES_SSLROOTCERT=
+POSTGRES_SSLCERT=
+POSTGRES_SSLKEY=
+```
+
+Si el error indica `connection requires a valid client certificate`, entonces necesitas los archivos de certificado cliente entregados por tu proveedor de base de datos:
+
+```env
+POSTGRES_SSLMODE=verify-full
+POSTGRES_SSLROOTCERT=/ruta/ca.pem
+POSTGRES_SSLCERT=/ruta/client-cert.pem
+POSTGRES_SSLKEY=/ruta/client-key.pem
+```
+
+Crear tablas:
+
+```bash
+psql -d eventos -f scripts/postgres/001_crear_tablas_jpomm.sql
+```
+
+Cargar datos iniciales desde los mocks actuales:
+
+```bash
+python scripts/postgres/002_cargar_datos_iniciales.py
+```
+
+Validar datos cargados:
+
+```bash
+psql -d eventos -f scripts/postgres/003_validar_datos.sql
+```
+
+Con `BUSINESS_DATA_SOURCE=postgres`, las tools existentes mantienen su misma firma, pero internamente consultan tablas dentro del schema `negocio`:
+
+- `negocio.jpomm_productos`
+- `negocio.jpomm_paquetes`
+- `negocio.jpomm_paquete_productos`
+- `negocio.jpomm_stock_productos`
+- `negocio.jpomm_disponibilidad_paquetes`
+- `negocio.jpomm_categoria_alternativas`
+- `negocio.jpomm_cobertura_distritos`
+- `negocio.jpomm_rag_documentos`
+- `negocio.jpomm_fechas_no_disponibles`
+- `negocio.jpomm_configuracion_calendario`
+- `negocio.jpomm_reservas_eventos`
+
+El modo `BUSINESS_DATA_SOURCE=mock` queda solo para desarrollo local o pruebas sin PostgreSQL. En flujo operativo usa `postgres`.
+
 ## Pruebas sugeridas
+
+Pruebas normales con mocks locales:
+
+```bash
+pytest
+```
+
+Smoke tests contra PostgreSQL, despues de crear tablas y cargar datos:
+
+```bash
+RUN_POSTGRES_TESTS=true BUSINESS_DATA_SOURCE=postgres pytest tests/test_postgres_smoke.py
+```
 
 ## Configurar LLM
 
