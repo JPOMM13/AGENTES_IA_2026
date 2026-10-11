@@ -1,84 +1,94 @@
-from __future__ import annotations
+"""Vista Streamlit del asistente de eventos."""
 
 import sys
+from datetime import datetime
 from pathlib import Path
 
 import streamlit as st
 
-FRONTEND_ROOT = Path(__file__).resolve().parent
-if str(FRONTEND_ROOT) not in sys.path:
-    sys.path.insert(0, str(FRONTEND_ROOT))
+RAIZ = Path(__file__).resolve().parent
+sys.path.insert(0, str(RAIZ))
 
 from cliente_api import ErrorApiCotizador, consultar_sesion_api, crear_sesion_api, enviar_mensaje_api, reiniciar_sesion_api
-from componentes import renderizar_panel_estado, renderizar_tarjeta_cotizacion, renderizar_tarjeta_imagen
+from componentes import renderizar_tarjeta_cotizacion, renderizar_tarjeta_imagen
 
 
-st.set_page_config(page_title="Workflow agentico de eventos", page_icon="WF", layout="wide")
-
-st.title("Workflow agentico para cotizacion de eventos")
-st.caption("POC local con catalogo, cobertura, disponibilidad, RAG y cotizacion mockeados.")
+st.set_page_config(page_title="Tus eventos", page_icon="💬", layout="wide", initial_sidebar_state="collapsed")
+st.markdown(f"<style>{(RAIZ / 'estilos.css').read_text(encoding='utf-8')}</style>", unsafe_allow_html=True)
 
 
-# FRONTEND STREAMLIT: esta capa solo renderiza y conversa con FastAPI por HTTP.
-def guardar_respuesta_api(respuesta_api: dict) -> None:
-    """Guarda en Streamlit solo la respuesta JSON devuelta por el backend."""
+def guardar_respuesta(respuesta):
+    st.session_state.id_sesion = respuesta["id_sesion"]
+    st.session_state.respuesta_api = respuesta
 
-    st.session_state.id_sesion = respuesta_api["id_sesion"]
-    st.session_state.respuesta_api = respuesta_api
+    # La API no envía fechas: conservamos la hora local al mostrar cada mensaje.
+    mensajes = respuesta.get("mensajes", [])
+    anteriores = st.session_state.get("mensajes_anteriores", [])
+    horas = st.session_state.get("horas_mensajes", [])
+    while anteriores and mensajes[:len(anteriores)] != anteriores:
+        anteriores = anteriores[1:]
+        horas = horas[1:]
+    horas += [datetime.now().strftime("%d/%m/%Y · %H:%M")] * (len(mensajes) - len(anteriores))
+    st.session_state.mensajes_anteriores = mensajes
+    st.session_state.horas_mensajes = horas
 
 
 try:
-    if "id_sesion" not in st.session_state:
-        guardar_respuesta_api(crear_sesion_api())
+    if "id_sesion" in st.session_state:
+        guardar_respuesta(consultar_sesion_api(st.session_state.id_sesion))
     else:
-        guardar_respuesta_api(consultar_sesion_api(st.session_state.id_sesion))
+        guardar_respuesta(crear_sesion_api())
 except ErrorApiCotizador as error:
-    st.error(str(error))
-    st.info("Levanta primero el backend con: uvicorn app.api:aplicacion --reload --port 8000")
+    st.error(f"No se pudo conectar con el agente: {error}")
     st.stop()
 
-respuesta_api = st.session_state.respuesta_api
+respuesta = st.session_state.respuesta_api
+titulo, boton = st.columns([4, 1], vertical_alignment="bottom")
+with titulo:
+    st.title("Tus eventos")
+    st.caption("Asesoría y cotización de servicios y bebidas para eventos")
+with boton:
+    if st.button("Nueva conversación", use_container_width=True):
+        try:
+            guardar_respuesta(reiniciar_sesion_api(respuesta["id_sesion"]))
+            st.session_state.hora_saludo = datetime.now().strftime("%d/%m/%Y · %H:%M")
+            st.rerun()
+        except ErrorApiCotizador as error:
+            st.error(str(error))
 
-if st.sidebar.button("Reiniciar conversacion"):
-    try:
-        guardar_respuesta_api(reiniciar_sesion_api(respuesta_api["id_sesion"]))
-    except ErrorApiCotizador as error:
-        st.error(str(error))
-    st.rerun()
-
-renderizar_panel_estado(respuesta_api)
-
-for message in respuesta_api.get("mensajes", []):
-    with st.chat_message(message["role"]):
-        st.markdown(message["content"])
-
-prompt = st.chat_input("Ej.: Necesito bebidas para un matrimonio de 100 personas el 25 de octubre en Miraflores")
-if prompt:
-    with st.chat_message("user"):
-        st.markdown(prompt)
-    try:
-        respuesta_chat = enviar_mensaje_api(respuesta_api["id_sesion"], prompt)
-        guardar_respuesta_api(respuesta_chat)
+with st.container(border=True, key="chat_completo"):
+    with st.container(height=350, border=False, autoscroll=True):
+        mensajes = respuesta.get("mensajes", [])
+        if "hora_saludo" not in st.session_state:
+            st.session_state.hora_saludo = datetime.now().strftime("%d/%m/%Y · %H:%M")
         with st.chat_message("assistant"):
-            st.markdown(respuesta_chat["respuesta"])
-    except ErrorApiCotizador as error:
-        st.error(str(error))
-    st.rerun()
+            st.write("¡Hola! ¿Qué evento estás organizando y qué productos o servicios necesitas?")
+            st.caption(st.session_state.hora_saludo)
+        for indice, mensaje in enumerate(mensajes):
+            with st.chat_message(mensaje["role"]):
+                st.markdown(mensaje["content"])
+                st.caption(st.session_state.horas_mensajes[indice])
 
-renderizar_tarjeta_cotizacion(respuesta_api)
-renderizar_tarjeta_imagen(respuesta_api)
+    texto = st.chat_input("Escribe tu mensaje...")
+    if texto:
+        try:
+            with st.spinner("Preparando respuesta..."):
+                guardar_respuesta(enviar_mensaje_api(respuesta["id_sesion"], texto))
+            st.rerun()
+        except ErrorApiCotizador as error:
+            st.error(f"No se pudo enviar el mensaje: {error}")
 
-with st.expander("Guia rapida"):
-    st.markdown(
-        """
-        Prueba estos mensajes:
+with st.expander("¿Qué puedo preguntar?"):
+    st.write("Por ejemplo: Necesito bebidas para un matrimonio de 100 personas en Miraflores.")
 
-        - `Necesito bebidas para un matrimonio de 100 personas el 25 de octubre en Miraflores`
-        - `Cuanto cuesta?`
-        - `Me haces 15% de descuento?`
-        - `Si, derivame con un asesor`
-        - `Muestrame una imagen del evento`
-        - `Que politica tienen para descuentos?`
-        - `Necesito bebidas para 80 personas el 25 de octubre en Chosica`
-        """
-    )
+renderizar_tarjeta_cotizacion(respuesta)
+renderizar_tarjeta_imagen(respuesta)
+
+with st.sidebar.expander("Datos técnicos"):
+    st.json(respuesta.get("estado_panel", {}))
+    estado = respuesta.get("estado", {})
+    if estado.get("dimensionamiento"):
+        st.json(estado["dimensionamiento"])
+    if estado.get("resumen_derivacion"):
+        st.json(estado["resumen_derivacion"])
+    st.json(estado.get("trazas", [])[-12:])
