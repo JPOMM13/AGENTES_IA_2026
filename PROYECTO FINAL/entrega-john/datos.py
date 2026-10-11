@@ -54,6 +54,15 @@ def _pool() -> ConnectionPool:
     return _POOL
 
 
+# CIERRE DE RECURSOS: permite a scripts cortos cerrar el pool antes del apagado de Python.
+def cerrar_pool() -> None:
+    """Cierra explicitamente el pool de conexiones si fue inicializado."""
+    global _POOL
+    if _POOL is not None:
+        _POOL.close()
+        _POOL = None
+
+
 @contextmanager
 def _cursor():
     with _pool().connection() as conn, conn.cursor() as cur:
