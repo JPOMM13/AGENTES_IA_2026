@@ -3,6 +3,8 @@ from __future__ import annotations
 import os
 
 from app.data.datos_mock import MOCK_KNOWLEDGE
+from app.fuente_datos import usar_postgres_negocio
+from app.repositorios_postgres.rag_postgres import buscar_rag_postgres
 
 RAG_CHAT_MODEL = "gpt-4o-mini"
 
@@ -11,6 +13,9 @@ RAG_CHAT_MODEL = "gpt-4o-mini"
 def mock_buscar_rag(query: str) -> dict:
     """Busca respuestas de politicas en la base de conocimiento mock."""
     # MOCK: ESTA TOOL DEBERIA CONSULTAR EL RAG REAL CON DOCUMENTOS EN STORAGE, EMBEDDINGS EN PGVECTOR/POSTGRESQL Y RETRIEVER SEMANTICO.
+    if usar_postgres_negocio():
+        return buscar_rag_postgres(query)
+
     texto = query.lower()
     matches = []
     for document in MOCK_KNOWLEDGE:
