@@ -73,6 +73,24 @@ POSTGRES_USER=tu_usuario
 POSTGRES_PASSWORD=tu_password
 ```
 
+Si tu servidor PostgreSQL exige SSL o certificado cliente, agrega tambien:
+
+```env
+POSTGRES_SSLMODE=require
+POSTGRES_SSLROOTCERT=
+POSTGRES_SSLCERT=
+POSTGRES_SSLKEY=
+```
+
+Si el error indica `connection requires a valid client certificate`, entonces necesitas los archivos de certificado cliente entregados por tu proveedor de base de datos:
+
+```env
+POSTGRES_SSLMODE=verify-full
+POSTGRES_SSLROOTCERT=/ruta/ca.pem
+POSTGRES_SSLCERT=/ruta/client-cert.pem
+POSTGRES_SSLKEY=/ruta/client-key.pem
+```
+
 Crear tablas:
 
 ```bash
