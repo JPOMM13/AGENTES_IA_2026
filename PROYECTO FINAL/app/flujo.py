@@ -17,7 +17,8 @@ from app.tools.dimensionamiento import mock_dimensionar_evento
 from app.tools.extraccion import extraer_intencion_y_campos
 from app.tools.derivacion import mock_derivar_whatsapp
 from app.tools.precios import mock_comparar_opciones, mock_generar_cotizacion
-from app.tools.consulta_rag import mock_buscar_rag
+from app.tools.consulta_rag import buscar_rag
+# from app.tools.consulta_rag import mock_buscar_rag
 
 
 REQUIRED_FIELDS = ["tipo_evento", "asistentes", "fecha_evento", "distrito", "nombre_cliente", "contacto", "productos_solicitados"]
@@ -1078,14 +1079,17 @@ def renderizar_respuesta_derivacion(handoff: dict) -> str:
     )
 
 
-# TOOL MOCK/RAG: responde politicas o conocimiento de negocio desde base mock.
+# TOOL RAG: responde politicas o conocimiento de negocio desde el RAG real en Supabase.
 def renderizar_respuesta_rag(query: str) -> str:
-    """Responde consultas de politica usando el RAG mock."""
-    resultado = mock_buscar_rag(query)
-    if not resultado["matches"]:
-        return "No encontre una politica mock relacionada. Para la POC solo tengo anticipacion, feriados y descuentos."
-    lines = [f"- **{doc['title']}**: {doc['texto']}" for doc in resultado["matches"]]
-    return "Segun el RAG mock:\n\n" + "\n".join(lines)
+    """Responde consultas de politica usando el RAG real."""
+    return buscar_rag(query)
+
+    # RAG MOCK (desactivado):
+    # resultado = mock_buscar_rag(query)
+    # if not resultado["matches"]:
+    #     return "No encontre una politica mock relacionada. Para la POC solo tengo anticipacion, feriados y descuentos."
+    # lines = [f"- **{doc['title']}**: {doc['texto']}" for doc in resultado["matches"]]
+    # return "Segun el RAG mock:\n\n" + "\n".join(lines)
 
 
 # VALIDACION DE INTENCION: detecta confirmaciones explicitas para generar cotizacion.
