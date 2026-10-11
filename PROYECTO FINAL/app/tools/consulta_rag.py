@@ -22,9 +22,10 @@ def mock_buscar_rag(query: str) -> dict:
 # TOOL RAG: consulta el RAG real en Supabase y responde solo con el contexto recuperado.
 def buscar_rag(query: str) -> str:
     """Consulta el RAG real en Supabase y responde usando solo el contexto recuperado."""
-    # Imports diferidos: retriever.py se conecta a Supabase al importarse.
+    # Imports diferidos: el retriever se conecta a la base al importarse/usarse.
     from openai import OpenAI
-    from app.tools.retriever import retrieve_chunks
+    # from app.tools.retriever import retrieve_chunks  # Supabase
+    from app.tools.retriever_gcp import retrieve_chunks  # GCP
 
     chunks = retrieve_chunks(query, top_k=6)
     if not chunks:
