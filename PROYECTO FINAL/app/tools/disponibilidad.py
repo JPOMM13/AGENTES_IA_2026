@@ -4,6 +4,12 @@ from datetime import date, datetime, timedelta
 
 from app.data.datos_mock import AVAILABILITY, DEFAULT_PRODUCT_STOCK, PRODUCT_CATEGORIES
 from app.estado import EstadoCotizacion
+from app.fuente_datos import usar_postgres_negocio
+from app.repositorios_postgres.disponibilidad_postgres import (
+    categorias_alternativas_postgres,
+    obtener_cupos_paquetes,
+    obtener_stock_productos,
+)
 
 
 # TOOL MOCK/DISPONIBILIDAD: valida cupos de paquetes/servicios para la fecha solicitada.
@@ -23,7 +29,7 @@ def mock_validar_disponibilidad(estado: EstadoCotizacion, options: list[dict]) -
             "opciones_descartadas": [{"option": option, "reason": "No cumple anticipacion minima de 72 horas."} for option in options],
         }
 
-    day_availability = AVAILABILITY.get(estado.fecha_evento, {})
+    day_availability = obtener_cupos_paquetes(estado.fecha_evento) if usar_postgres_negocio() else AVAILABILITY.get(estado.fecha_evento, {})
     for option in options:
         cupos = day_availability.get(option["id"], 1)
         if cupos > 0:
@@ -43,7 +49,7 @@ def mock_validar_stock_productos(estado: EstadoCotizacion, requested_items: list
     if not estado.fecha_evento:
         return {"available_items": [], "missing_items": requested_items}
 
-    day_availability = {**DEFAULT_PRODUCT_STOCK, **AVAILABILITY.get(estado.fecha_evento, {})}
+    day_availability = obtener_stock_productos(estado.fecha_evento) if usar_postgres_negocio() else {**DEFAULT_PRODUCT_STOCK, **AVAILABILITY.get(estado.fecha_evento, {})}
     product_by_category = {product["category"]: product for product in products}
     available_items = []
     missing_items = []
@@ -96,6 +102,9 @@ def buscar_alternativas_producto_disponibles(item: dict, products: list[dict], d
 # TOOL MOCK/CATALOGO: define categorias cercanas para sugerir alternativas sin inventar productos.
 def categorias_alternativas_para(category: str) -> list[str]:
     """Devuelve categorias alternativas configuradas para un producto."""
+    if usar_postgres_negocio():
+        return categorias_alternativas_postgres(category)
+
     for config in PRODUCT_CATEGORIES.values():
         if category in config.get("alternatives", {}):
             return config["alternatives"][category]
