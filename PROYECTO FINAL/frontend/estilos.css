@@ -1,0 +1,108 @@
+[data-testid="stAppViewContainer"] {
+  background: #f5f5f7;
+  color: #1d1d1f;
+}
+
+[data-testid="stHeader"] { background: transparent; }
+.block-container { max-width: 1000px; padding-top: 1rem; }
+
+[data-testid="stMarkdownContainer"],
+[data-testid="stMarkdownContainer"] :is(h1, h2, h3, p, li, a, strong, em),
+[data-testid="stCaptionContainer"],
+[data-testid="stCaptionContainer"] *,
+[data-testid="stWidgetLabel"],
+button, textarea {
+  font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif !important;
+}
+
+[data-testid="stMarkdownContainer"] :is(h1, h2, h3) { color: #1d1d1f !important; letter-spacing: -.02em; }
+h1 { font-size: 1.5rem !important; font-weight: 600 !important; line-height: 1.25 !important; }
+h3 { font-size: 1.1rem !important; font-weight: 600 !important; }
+[data-testid="stCaptionContainer"] * { color: #616167 !important; }
+[data-testid="stChatMessage"] [data-testid="stCaptionContainer"] * { color: #616167 !important; }
+[data-testid="stChatMessage"] [data-testid="stCaptionContainer"] * { font-size: 12px !important; }
+
+.st-key-chat_completo {
+  background: #fff;
+  border: 1px solid #d2d2d7 !important;
+  border-radius: 16px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, .04);
+  margin-top: .75rem;
+}
+
+[data-testid="stChatMessage"] {
+  background: #f5f5f7;
+  border: 0;
+  border-radius: 14px;
+  padding: .7rem .85rem !important;
+  width: fit-content;
+  max-width: 85%;
+  margin-right: auto;
+}
+[data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarUser"]) {
+  background: #e8f2ff;
+  flex-direction: row-reverse;
+  margin-left: auto;
+  margin-right: 0;
+}
+[data-testid="stChatMessage"] [data-testid="stChatMessageContent"] {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+[data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarUser"]) [data-testid="stCaptionContainer"] {
+  text-align: right;
+}
+[data-testid="stChatMessageAvatarAssistant"] {
+  background: #e8e8ed !important;
+  color: #3a3a3c !important;
+}
+[data-testid="stChatMessageAvatarUser"] {
+  background: #e8f2ff !important;
+  color: #0071e3 !important;
+}
+[data-testid="stChatMessage"] :is(p, li, strong, em, blockquote) {
+  color: #1d1d1f !important;
+  font-size: 14px !important;
+  line-height: 1.45 !important;
+}
+[data-testid="stChatMessage"] p { margin-bottom: .45rem !important; }
+[data-testid="stChatMessage"] li { margin-bottom: .15rem !important; }
+[data-testid="stChatMessage"] a { color: #0071e3 !important; }
+[data-testid="stChatMessage"] :is(p, li) code {
+  color: #1d1d1f !important;
+  background: #f0f0f2 !important;
+  border-radius: 4px;
+}
+
+[data-testid="stButton"] button {
+  background: #fff !important;
+  border: 1px solid #d2d2d7 !important;
+  border-radius: 9px;
+  color: #1d1d1f !important;
+}
+[data-testid="stButton"] button p { color: #1d1d1f !important; }
+[data-testid="stButton"] button:hover { background: #f5f5f7 !important; }
+[data-testid="stChatInput"] > div {
+  background: #fff !important;
+  border: 1px solid #d2d2d7 !important;
+  border-radius: 10px;
+}
+[data-testid="stChatInput"] textarea,
+[data-testid="stChatInput"] textarea::placeholder {
+  color: #1d1d1f !important;
+  -webkit-text-fill-color: #1d1d1f !important;
+}
+[data-testid="stChatInputSubmitButton"]:not(:disabled) {
+  background: #0071e3 !important;
+  color: #fff !important;
+}
+[data-testid="stChatInputSubmitButton"]:not(:disabled):hover { background: #0066cc !important; }
+[data-testid="stChatInputSubmitButton"]:disabled {
+  background: #f2f2f7 !important;
+  color: #8e8e93 !important;
+}
+
+@media (max-width: 700px) {
+  .block-container { padding: 1rem; }
+  [data-testid="stChatMessage"] { max-width: 92%; }
+}
