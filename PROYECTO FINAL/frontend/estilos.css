@@ -74,6 +74,17 @@ h3 { font-size: 1.1rem !important; font-weight: 600 !important; }
   border-radius: 4px;
 }
 
+.st-key-chat_completo [data-testid="stExpander"] details {
+  background: #fff;
+  border: 1px solid #d2d2d7;
+  border-radius: 8px;
+}
+.st-key-chat_completo [data-testid="stExpander"] summary,
+.st-key-chat_completo [data-testid="stExpander"] summary:hover {
+  background: #fff !important;
+  color: #1d1d1f !important;
+}
+
 [data-testid="stButton"] button {
   background: #fff !important;
   border: 1px solid #d2d2d7 !important;
