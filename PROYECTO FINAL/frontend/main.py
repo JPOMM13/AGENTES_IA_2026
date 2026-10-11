@@ -57,7 +57,7 @@ with boton:
             st.error(str(error))
 
 with st.container(border=True, key="chat_completo"):
-    caja_mensajes = st.container(height=350, border=False, autoscroll=True)
+    caja_mensajes = st.container(height=350, border=False, autoscroll=True, key="historial_chat")
     with caja_mensajes:
         mensajes = respuesta.get("mensajes", [])
         if "hora_saludo" not in st.session_state:
