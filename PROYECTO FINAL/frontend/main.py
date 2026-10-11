@@ -57,7 +57,8 @@ with boton:
             st.error(str(error))
 
 with st.container(border=True, key="chat_completo"):
-    with st.container(height=350, border=False, autoscroll=True):
+    caja_mensajes = st.container(height=350, border=False, autoscroll=True)
+    with caja_mensajes:
         mensajes = respuesta.get("mensajes", [])
         if "hora_saludo" not in st.session_state:
             st.session_state.hora_saludo = datetime.now().strftime("%d/%m/%Y · %H:%M")
@@ -71,6 +72,11 @@ with st.container(border=True, key="chat_completo"):
 
     texto = st.chat_input("Escribe tu mensaje...")
     if texto:
+        # Mostramos el mensaje antes de esperar la respuesta de la API.
+        with caja_mensajes:
+            with st.chat_message("user"):
+                st.markdown(texto)
+                st.caption(datetime.now().strftime("%d/%m/%Y · %H:%M"))
         try:
             with st.spinner("Preparando respuesta..."):
                 guardar_respuesta(enviar_mensaje_api(respuesta["id_sesion"], texto))
