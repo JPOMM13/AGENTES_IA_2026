@@ -177,22 +177,31 @@ FORMATO DE SALIDA:
 # VALIDACION DE SALIDA AGENTICA: convierte texto o tool output del LLM en una accion interna permitida.
 def normalizar_decision(content: str) -> DecisionAgente | None:
     """Extrae una accion valida desde texto o salida de tool."""
-    allowed: set[str] = {
-        "pedir_campos_faltantes",
-        "responder_precio",
-        "validar_y_recomendar",
-        "generar_cotizacion",
-        "mostrar_imagen",
-        "derivacion",
-        "responder_politica",
-        "cierre",
-        "retomar_previa",
-        "nueva_cotizacion",
+    equivalencias = {
+        "pedir_campos_faltantes": "pedir_campos_faltantes",
+        "responder_precio": "answer_price",
+        "answer_price": "answer_price",
+        "validar_y_recomendar": "validate_and_recommend",
+        "validate_and_recommend": "validate_and_recommend",
+        "generar_cotizacion": "generate_quote",
+        "generate_quote": "generate_quote",
+        "mostrar_imagen": "show_image",
+        "show_image": "show_image",
+        "derivacion": "handoff",
+        "handoff": "handoff",
+        "responder_politica": "answer_policy",
+        "answer_policy": "answer_policy",
+        "cierre": "close",
+        "close": "close",
+        "retomar_previa": "resume_previous",
+        "resume_previous": "resume_previous",
+        "nueva_cotizacion": "new_quote",
+        "new_quote": "new_quote",
     }
     texto = content.strip().lower()
-    for accion in allowed:
+    for accion, normalizada in equivalencias.items():
         if accion in texto:
-            return accion  # type: ignore[return-value]
+            return normalizada  # type: ignore[return-value]
     return None
 
 

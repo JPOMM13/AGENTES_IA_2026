@@ -14,7 +14,7 @@ if str(PROJECT_ROOT) not in sys.path:
 from dotenv import load_dotenv
 from openai import OpenAI
 # from app.tools.retriever import retrieve_chunks  # Supabase
-from app.tools.retriever_gcp import retrieve_chunks  # GCP
+from app.tools.retriever_gcp import cerrar_pool_rag, retrieve_chunks  # GCP
 
 load_dotenv()
 
@@ -57,10 +57,12 @@ def answer_question(question: str, top_k: int = 6, threshold: float = RAG_THRESH
     return response.choices[0].message.content
 
 if __name__ == "__main__":
-    pregunta = input("Haz tu pregunta: ")
-    respuesta = answer_question(pregunta)
+    try:
+        pregunta = input("Haz tu pregunta: ")
+        respuesta = answer_question(pregunta)
 
-    print("\n=== RESPUESTA ===\n")
-    print(respuesta)
-
+        print("\n=== RESPUESTA ===\n")
+        print(respuesta)
+    finally:
+        cerrar_pool_rag()
 

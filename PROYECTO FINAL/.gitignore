@@ -3,6 +3,7 @@ __pycache__/
 *.pyc
 .venv/
 .env
+app/mock_calendario_eventos.json
 app/data/mock_session_memory.json
 app/data/mock_redis_session.json
 app/data/generated/

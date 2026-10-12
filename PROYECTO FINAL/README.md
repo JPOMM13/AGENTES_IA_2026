@@ -139,6 +139,50 @@ Smoke tests contra PostgreSQL, despues de crear tablas y cargar datos:
 RUN_POSTGRES_TESTS=true BUSINESS_DATA_SOURCE=postgres pytest tests/test_postgres_smoke.py
 ```
 
+## Memoria persistente y Redis
+
+La memoria del agente queda separada en dos responsabilidades:
+
+- Memoria persistente de cotizaciones anteriores: reemplaza `app/data/mock_session_memory.json` y puede guardarse en PostgreSQL JSONB dentro del schema `memory`.
+- Memoria corta de sesion activa: reemplaza `app/data/mock_redis_session.json` y puede guardarse en Redis con TTL por `id_sesion`.
+
+Configura `.env`:
+
+```env
+MEMORY_DATA_SOURCE=postgres
+POSTGRES_MEMORY_SCHEMA=memory
+SESSION_STORE=redis
+REDIS_URL=redis://default:tu_password@tu_host:6379
+REDIS_SESSION_TTL_SECONDS=86400
+```
+
+Crear tabla de memoria persistente:
+
+```bash
+psql -d eventos -f scripts/postgres/004_crear_memoria_jsonb.sql
+```
+
+Migrar el mock actual de memoria persistente:
+
+```bash
+python scripts/postgres/005_migrar_mock_session_memory.py
+```
+
+Validar la memoria migrada:
+
+```bash
+psql -d eventos -f scripts/postgres/006_validar_memoria_jsonb.sql
+```
+
+Smoke tests opcionales:
+
+```bash
+RUN_POSTGRES_MEMORY_TESTS=true MEMORY_DATA_SOURCE=postgres pytest tests/test_memoria_postgres_redis_smoke.py
+RUN_REDIS_TESTS=true SESSION_STORE=redis pytest tests/test_memoria_postgres_redis_smoke.py
+```
+
+Si `MEMORY_DATA_SOURCE=mock` o `SESSION_STORE=mock`, el proyecto sigue usando los JSON locales para desarrollo y pruebas sin servicios externos.
+
 ## Configurar LLM
 
 La POC usa una configuracion unica para el LLM. Con esto cambias de Ollama a OpenAI o Anthropic sin tocar el codigo.

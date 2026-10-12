@@ -396,6 +396,29 @@ def test_productos_faltantes_lista_catalogo_para_elegir():
     assert estado.opcion_recomendada is None
 
 
+# Prueba que una respuesta directa con productos no se pierda aunque el LLM clasifique revision.
+def test_productos_directos_se_guardan_aunque_agente_proponga_revision(monkeypatch):
+    estado = EstadoCotizacion(
+        tipo_evento="matrimonio",
+        asistentes=30,
+        fecha_evento="2027-02-05",
+        distrito="Miraflores",
+        nombre_cliente="John Manchego",
+        contacto="989515182",
+    )
+    estado.campos_faltantes = ["productos_solicitados"]
+    monkeypatch.setattr(
+        extraction_tools,
+        "_extraer_campos_con_agente",
+        lambda mensaje, estado: {"intent_override": "review_order"},
+    )
+
+    respuesta, estado = manejar_mensaje("vino y hielo.", estado)
+
+    assert estado.productos_solicitados == ["vino", "hielo"]
+    assert "sin productos/servicios elegidos todavia" not in respuesta
+
+
 # Prueba el comportamiento de test usuario puede revisar y modificar productos antes cotizar.
 def test_usuario_puede_revisar_y_modificar_productos_antes_cotizar():
     estado = EstadoCotizacion()
@@ -730,6 +753,23 @@ def test_fallback_si_llm_decisor_falla_en_recuperacion_memoria(monkeypatch):
     assert estado.campos_faltantes == ["contacto"]
     assert "telefono o correo" in respuesta
     assert "cantidad de asistentes" not in respuesta
+
+
+# Prueba que el guardrail no permita que el LLM convierta un saludo simple en consulta de precio.
+def test_guardrail_decision_preserva_saludo_simple(monkeypatch):
+    monkeypatch.setattr(
+        workflow,
+        "decidir_siguiente_accion_con_agente",
+        lambda mensaje_usuario, estado: "answer_price",
+    )
+    estado = EstadoCotizacion()
+
+    respuesta, estado = manejar_mensaje("Hola que tal como estas?", estado)
+
+    assert estado.intencion == "greeting"
+    assert estado.etapa == "saludo"
+    assert "tipo de evento" in respuesta
+    assert "precio informativo" not in respuesta
 
 
 # Prueba que pedir otra cotizacion limpie el contexto anterior.
