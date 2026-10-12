@@ -86,15 +86,15 @@ class EstadoCotizacion:
             "imagen_artefacto_cotizacion": self.imagen_artefacto_cotizacion,
         }
 
-    # MEMORIA MOCK: serializa el estado para guardarlo en JSON local o persistencia futura.
+    # MEMORIA PERSISTENTE: serializa el estado para guardarlo entre sesiones.
     def a_diccionario_persistido(self) -> dict[str, Any]:
-        """Serializa el estado para guardarlo en la memoria mock entre sesiones."""
+        """Serializa el estado para guardarlo entre sesiones."""
         data = asdict(self)
         data["mensajes"] = data["mensajes"][-20:]
         data["trazas"] = data["trazas"][-50:]
         return data
 
-    # MEMORIA MOCK: reconstruye el estado desde JSON persistido manteniendo compatibilidad.
+    # MEMORIA PERSISTENTE: reconstruye el estado desde JSON persistido manteniendo compatibilidad.
     @classmethod
     def desde_diccionario_persistido(cls, data: dict[str, Any]) -> "EstadoCotizacion":
         """Reconstruye un EstadoCotizacion desde datos guardados previamente."""

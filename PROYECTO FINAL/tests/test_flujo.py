@@ -110,8 +110,68 @@ def test_cotizacion_despues_recomendacion():
     assert estado.cotizacion is None
 
     respuesta, estado = manejar_mensaje("genera la cotizacion", estado)
-    assert "Cotizacion mock" in respuesta
+    assert "cotizacion" in respuesta.lower()
     assert estado.cotizacion["total"] == 3304.0
+
+
+# Prueba que una mala clasificacion del extractor LLM no limpie el estado al generar cotizacion.
+def test_generar_cotizacion_no_acepta_override_nueva_cotizacion(monkeypatch):
+    estado = EstadoCotizacion()
+    _, estado = manejar_mensaje(
+        "Soy Juan Perez, mi telefono es 999888777. Necesito cerveza y agua para un matrimonio de 30 personas el 5 de febrero de 2027 en Miraflores",
+        estado,
+    )
+    assert estado.productos_solicitados == ["cerveza", "agua"]
+    assert estado.opcion_recomendada is not None
+
+    monkeypatch.setattr(
+        extraction_tools,
+        "_extraer_campos_con_agente",
+        lambda mensaje_usuario, estado: {"intent_override": "new_quote"},
+    )
+
+    respuesta, estado = manejar_mensaje("genera la cotizacion", estado)
+
+    assert estado.tipo_evento == "matrimonio"
+    assert estado.asistentes == 30
+    assert estado.productos_solicitados == ["cerveza", "agua"]
+    assert estado.cotizacion is not None
+    assert "cotizacion" in respuesta.lower()
+
+
+# Prueba que variantes naturales de confirmacion generen cotizacion por contexto.
+def test_variantes_naturales_generan_cotizacion_por_contexto():
+    for indice, mensaje_confirmacion in enumerate(["emítela", "dale procede", "haz la proforma", "cerramos con eso"], start=1):
+        estado = EstadoCotizacion()
+        _, estado = manejar_mensaje(
+            f"Soy Juan Perez, mi telefono es 99988877{indice}. Necesito cerveza y agua para un matrimonio de 30 personas el {indice + 5} de febrero de 2027 en Miraflores",
+            estado,
+        )
+
+        respuesta, estado = manejar_mensaje(mensaje_confirmacion, estado)
+
+        assert estado.cotizacion is not None
+        assert "cotizacion" in respuesta.lower()
+
+
+# Prueba que el override estructurado generate_quote del extractor se acepte con guardrails.
+def test_override_agentico_generate_quote_genera_con_validacion(monkeypatch):
+    estado = EstadoCotizacion()
+    _, estado = manejar_mensaje(
+        "Soy Juan Perez, mi telefono es 999888777. Necesito cerveza y agua para un matrimonio de 30 personas el 5 de febrero de 2027 en Miraflores",
+        estado,
+    )
+
+    monkeypatch.setattr(
+        extraction_tools,
+        "_extraer_campos_con_agente",
+        lambda mensaje_usuario, estado: {"intent_override": "generate_quote"},
+    )
+
+    respuesta, estado = manejar_mensaje("procede", estado)
+
+    assert estado.cotizacion is not None
+    assert "cotizacion" in respuesta.lower()
 
 
 # Prueba el comportamiento de test cotizacion genera artefacto visual.
@@ -126,7 +186,7 @@ def test_cotizacion_genera_artefacto_visual(monkeypatch, tmp_path):
 
     assert estado.imagen_artefacto_cotizacion
     assert (tmp_path / "generated").exists()
-    assert "Q-POC-0001" in estado.imagen_artefacto_cotizacion
+    assert "COT-0001" in estado.imagen_artefacto_cotizacion
 
 
 # Prueba el comportamiento de test descuento no cambia precio y ofrece derivacion.
@@ -239,7 +299,7 @@ def test_producto_no_soportado_sugiere_similar_antes_cotizar():
         "Soy John Manchego, mi telefono es 989515182. Necesito whisky economico para un matrimonio de 34 personas el 25 de octubre en Miraflores",
         estado,
     )
-    assert "no lo tengo en catalogo mock" in respuesta
+    assert "no lo tengo en catalogo" in respuesta
     assert "vino" in respuesta
     assert "cerveza" in respuesta
     assert estado.opcion_recomendada is None
@@ -260,7 +320,7 @@ def test_producto_inexistente_sugiere_alternativas_por_categoria():
     )
 
     assert "tequila" in respuesta
-    assert "no lo tengo en catalogo mock" in respuesta
+    assert "no lo tengo en catalogo" in respuesta
     assert "ron" in respuesta
     assert "vino" in respuesta
     assert "cerveza" in respuesta
@@ -466,7 +526,7 @@ def test_calendario_mock_bloquea_cruce_despues_de_cotizar():
         primera,
     )
     respuesta, primera = manejar_mensaje("genera la cotizacion", primera)
-    assert "Cotizacion mock" in respuesta
+    assert "cotizacion" in respuesta.lower()
 
     segunda = EstadoCotizacion()
     respuesta, segunda = manejar_mensaje(
@@ -475,7 +535,7 @@ def test_calendario_mock_bloquea_cruce_despues_de_cotizar():
     )
 
     assert segunda.calendario_ok is False
-    assert "ya tiene una reserva mock registrada" in respuesta
+    assert "ya tiene una reserva registrada" in respuesta
     assert segunda.opcion_recomendada is None
 
 
@@ -555,7 +615,7 @@ def test_retomar_cotizacion_previa_obliga_revalidar_calendario(monkeypatch, tmp_
         previo,
     )
     respuesta, previo = manejar_mensaje("genera la cotizacion", previo)
-    assert "Cotizacion mock" in respuesta
+    assert "cotizacion" in respuesta.lower()
     assert previo.cotizacion is not None
 
     actual = EstadoCotizacion()
@@ -572,7 +632,7 @@ def test_retomar_cotizacion_previa_obliga_revalidar_calendario(monkeypatch, tmp_
     respuesta, actual = manejar_mensaje("genera la cotizacion", actual)
 
     assert actual.calendario_ok is False
-    assert "ya tiene una reserva mock registrada" in respuesta
+    assert "ya tiene una reserva registrada" in respuesta
     assert actual.cotizacion is None
 
 

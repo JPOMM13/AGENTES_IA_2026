@@ -17,7 +17,7 @@ from app.ui.componentes import renderizar_tarjeta_imagen, renderizar_tarjeta_cot
 st.set_page_config(page_title="Workflow agentico de eventos", page_icon="WF", layout="wide")
 
 st.title("Workflow agentico para cotizacion de eventos")
-st.caption("POC local con catalogo, cobertura, disponibilidad, RAG y cotizacion mockeados.")
+st.caption("Asesoria y cotizacion de servicios y bebidas para eventos.")
 
 
 # FRONTEND STREAMLIT: esta capa solo renderiza y conversa con FastAPI por HTTP.

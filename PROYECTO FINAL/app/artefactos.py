@@ -23,12 +23,12 @@ def generar_artefacto_visual_cotizacion(estado: Any) -> str:
     ARTIFACT_DIR.mkdir(parents=True, exist_ok=True)
 
     # PRUEBAS DE FLUJO: SE COMENTA LA LLAMADA A OPENAI IMAGES PARA NO CONSUMIR API.
-    # AL ESTAR COMENTADO, LA APP USA EL SVG MOCK LOCAL GENERADO MAS ABAJO.
+    # AL ESTAR COMENTADO, LA APP USA EL SVG LOCAL GENERADO MAS ABAJO.
     # image_path = generar_imagen_multimodal_evento(estado)
     # if image_path:
     #     return image_path
 
-    # MOCK: RESPALDO LOCAL CUANDO NO HAY PROVEEDOR MULTIMODAL CONFIGURADO.
+    # RESPALDO LOCAL CUANDO NO HAY PROVEEDOR MULTIMODAL CONFIGURADO.
     # EN PRODUCCION ESTO DEBERIA SER UNA IMAGEN GENERADA POR EL PROVEEDOR DE IA O UN ASSET GUARDADO EN STORAGE.
     quote_id = estado.cotizacion.get("quote_id", "cotizacion")
     filename = f"{nombre_archivo_seguro(quote_id)}_{nombre_archivo_seguro(estado.id_sesion[:8])}.svg"
@@ -55,10 +55,10 @@ def refrescar_artefacto_visual_si_es_necesario(estado: Any) -> str:
     return estado.imagen_artefacto_cotizacion or ""
 
 
-# MULTIMODAL/IMAGEN: punto donde se llamaria a la API de imagen; ahora puede usar mock si esta comentada.
+# MULTIMODAL/IMAGEN: punto donde se llamaria a la API de imagen; ahora puede usar respaldo local si esta comentada.
 def generar_imagen_multimodal_evento(estado: Any) -> str:
     """Llama al proveedor multimodal configurado y guarda un PNG del evento."""
-    estado.registrar_log("generar_imagen_multimodal_evento", {"mensaje": "IMAGEN MOCK NO GENERADA"})
+    estado.registrar_log("generar_imagen_multimodal_evento", {"mensaje": "IMAGEN NO GENERADA"})
     return ""
 
     # CODIGO DESACTIVADO PARA PRUEBAS: DESCOMENTAR ESTE BLOQUE PARA VOLVER A CONSUMIR OPENAI IMAGES.
@@ -76,7 +76,7 @@ def generar_imagen_multimodal_evento(estado: Any) -> str:
     # path = ARTIFACT_DIR / filename
     #
     # try:
-    #     # MOCK: EN ESTA POC SOLO SE ENVIA EL PROMPT A OPENAI IMAGES.
+    #     # MULTIMODAL: ENVIA EL PROMPT A OPENAI IMAGES.
     #     # EN PRODUCCION EL PROMPT Y LA IMAGEN GENERADA PUEDEN AUDITARSE EN STORAGE/POSTGRES.
     #     carga = {
     #         "model": config.model,
@@ -167,7 +167,7 @@ def describir_servicios_para_imagen(estado: Any) -> str:
     return f", ademas de servicios como {visible_services}"
 
 
-# IMAGEN MOCK: construye SVG local cuando no se usa API multimodal real.
+# IMAGEN LOCAL: construye SVG local cuando no se usa API multimodal real.
 def construir_svg_cotizacion(estado: Any) -> str:
     """Construye el SVG con datos del evento, productos y totales."""
     tipo_evento = html.escape(str(estado.tipo_evento or "evento"))
@@ -227,7 +227,7 @@ def nombres_productos_cotizacion(estado: Any) -> list[str]:
     return list(estado.productos_solicitados)
 
 
-# ARTEFACTO VISUAL: renderiza etiquetas de productos dentro del SVG mock.
+# ARTEFACTO VISUAL: renderiza etiquetas de productos dentro del SVG local.
 def renderizar_chips_productos(products: list[str]) -> str:
     """Dibuja chips dentro del SVG para los principales productos."""
     chips = []

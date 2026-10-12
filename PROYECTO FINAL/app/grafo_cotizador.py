@@ -2,7 +2,7 @@ from __future__ import annotations
 
 # RESUMEN: ESTE MODULO IMPLEMENTA EL WORKFLOW AGENTICO CON LANGGRAPH.
 # RESUMEN: EL GRAFO ORQUESTA GUARDRAIL DE ENTRADA, EXTRACCION/ROUTER,
-# MEMORIA PERSISTENTE MOCK, DECISION AGENTICA, TOOLS MOCK DE NEGOCIO
+# MEMORIA PERSISTENTE, DECISION AGENTICA, TOOLS DE NEGOCIO
 # Y GUARDRAIL/EVALUADOR DE SALIDA ANTES DE RESPONDER AL USUARIO.
 
 from functools import lru_cache
@@ -61,7 +61,7 @@ def obtener_grafo_cotizador():
     grafo.add_node("extraer_y_enrutar_intencion", extraer_y_enrutar_intencion)
     grafo.add_node("gestionar_memoria_persistente", gestionar_memoria_persistente)
     grafo.add_node("decidir_accion_agentica", decidir_accion_agentica)
-    grafo.add_node("ejecutar_tools_mock_negocio", ejecutar_tools_mock_negocio)
+    grafo.add_node("ejecutar_tools_negocio", ejecutar_tools_negocio)
     grafo.add_node("evaluar_salida_guardrail", evaluar_salida_guardrail)
 
     grafo.add_edge(START, "validar_entrada")
@@ -76,8 +76,8 @@ def obtener_grafo_cotizador():
         ruta_si_finalizado,
         {"finalizar": "evaluar_salida_guardrail", "continuar": "decidir_accion_agentica"},
     )
-    grafo.add_edge("decidir_accion_agentica", "ejecutar_tools_mock_negocio")
-    grafo.add_edge("ejecutar_tools_mock_negocio", "evaluar_salida_guardrail")
+    grafo.add_edge("decidir_accion_agentica", "ejecutar_tools_negocio")
+    grafo.add_edge("ejecutar_tools_negocio", "evaluar_salida_guardrail")
     grafo.add_edge("evaluar_salida_guardrail", END)
 
     return grafo.compile()
@@ -118,9 +118,9 @@ def extraer_y_enrutar_intencion(estado_grafo: EstadoGrafoCotizador) -> EstadoGra
     return {**estado_grafo, "estado_cotizacion": estado}
 
 
-# MEMORIA MOCK / NODO LANGGRAPH: consulta o retoma una cotizacion previa cuando el usuario lo solicita.
+# MEMORIA PERSISTENTE / NODO LANGGRAPH: consulta o retoma una cotizacion previa cuando el usuario lo solicita.
 def gestionar_memoria_persistente(estado_grafo: EstadoGrafoCotizador) -> EstadoGrafoCotizador:
-    """Consulta memoria mock si hay contacto o si existe una eleccion pendiente."""
+    """Consulta memoria persistente si hay contacto o si existe una eleccion pendiente."""
     mensaje = estado_grafo["mensaje_usuario"]
     estado = estado_grafo["estado_cotizacion"]
     resultado = resolver_memoria_y_elecciones_previas(mensaje, estado)
@@ -149,12 +149,12 @@ def decidir_accion_agentica(estado_grafo: EstadoGrafoCotizador) -> EstadoGrafoCo
     return {**estado_grafo, "estado_cotizacion": estado}
 
 
-# TOOLS MOCK DE NEGOCIO / NODO LANGGRAPH: ejecuta catalogo, cobertura, stock, precios y cotizacion simulada.
-def ejecutar_tools_mock_negocio(estado_grafo: EstadoGrafoCotizador) -> EstadoGrafoCotizador:
-    """Ejecuta reglas de negocio y tools mock: catalogo, stock, cobertura y cotizacion."""
+# TOOLS DE NEGOCIO / NODO LANGGRAPH: ejecuta catalogo, cobertura, stock, precios y cotizacion.
+def ejecutar_tools_negocio(estado_grafo: EstadoGrafoCotizador) -> EstadoGrafoCotizador:
+    """Ejecuta reglas de negocio y tools: catalogo, stock, cobertura y cotizacion."""
     mensaje = estado_grafo["mensaje_usuario"]
     respuesta, estado, etapa = ejecutar_decision_negocio(mensaje, estado_grafo["estado_cotizacion"])
-    estado.registrar_log("nodo_ejecutar_tools_mock_negocio", {"etapa": etapa})
+    estado.registrar_log("nodo_ejecutar_tools_negocio", {"etapa": etapa})
     return {
         **estado_grafo,
         "estado_cotizacion": estado,

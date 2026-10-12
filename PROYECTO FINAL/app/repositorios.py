@@ -23,13 +23,13 @@ def leer_variable_configuracion(nombre: str, valor_por_defecto: str) -> str:
     return os.getenv(nombre, valor_por_defecto).strip().lower()
 
 
-# CONFIGURACION REPOSITORIOS: decide si la memoria corta vive en Redis real o mock JSON.
+# CONFIGURACION REPOSITORIOS: decide si la memoria corta vive en Redis o almacenamiento local.
 def usar_redis_para_sesion() -> bool:
     """Indica si SESSION_STORE esta configurado en redis."""
     return leer_variable_configuracion("SESSION_STORE", "mock") == "redis"
 
 
-# CONFIGURACION REPOSITORIOS: decide si la memoria persistente vive en PostgreSQL JSONB o mock JSON.
+# CONFIGURACION REPOSITORIOS: decide si la memoria persistente vive en PostgreSQL JSONB o almacenamiento local.
 def usar_postgres_para_memoria() -> bool:
     """Indica si MEMORY_DATA_SOURCE esta configurado en postgres."""
     return leer_variable_configuracion("MEMORY_DATA_SOURCE", "mock") == "postgres"
@@ -38,7 +38,7 @@ def usar_postgres_para_memoria() -> bool:
 class RepositorioSesionActiva:
     """Repositorio de memoria corta; en produccion seria Redis."""
 
-    # REPOSITORIO: guarda sesion activa en Redis real o en el mock local segun SESSION_STORE.
+    # REPOSITORIO: guarda sesion activa en Redis o almacenamiento local segun SESSION_STORE.
     def guardar(self, estado: EstadoCotizacion) -> None:
         """Guarda la foto actual de la conversacion activa."""
         if usar_redis_para_sesion():
@@ -46,14 +46,14 @@ class RepositorioSesionActiva:
             return
         almacen_sesion_redis.guardar_sesion_activa(estado)
 
-    # REPOSITORIO: recupera sesion activa desde Redis real o desde el mock local segun SESSION_STORE.
+    # REPOSITORIO: recupera sesion activa desde Redis o almacenamiento local segun SESSION_STORE.
     def obtener(self, id_sesion: str) -> EstadoCotizacion | None:
         """Recupera el estado activo por id_sesion."""
         if usar_redis_para_sesion():
             return cargar_sesion_activa_redis(id_sesion)
         return almacen_sesion_redis.cargar_sesion_activa(id_sesion)
 
-    # REPOSITORIO: elimina sesion activa desde Redis real o desde el mock local segun SESSION_STORE.
+    # REPOSITORIO: elimina sesion activa desde Redis o almacenamiento local segun SESSION_STORE.
     def reiniciar(self, id_sesion: str) -> None:
         """Elimina la memoria activa de una conversacion."""
         if usar_redis_para_sesion():
@@ -65,7 +65,7 @@ class RepositorioSesionActiva:
 class RepositorioMemoriaCotizacion:
     """Repositorio de memoria persistente; en produccion seria PostgreSQL/NoSQL."""
 
-    # REPOSITORIO: guarda memoria persistente en PostgreSQL JSONB o mock local segun MEMORY_DATA_SOURCE.
+    # REPOSITORIO: guarda memoria persistente en PostgreSQL JSONB o almacenamiento local segun MEMORY_DATA_SOURCE.
     def guardar(self, estado: EstadoCotizacion) -> None:
         """Guarda el estado persistente asociado al contacto."""
         if usar_postgres_para_memoria():

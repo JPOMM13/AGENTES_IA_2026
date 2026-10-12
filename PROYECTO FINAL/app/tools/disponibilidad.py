@@ -12,10 +12,10 @@ from app.repositorios_postgres.disponibilidad_postgres import (
 )
 
 
-# TOOL MOCK/DISPONIBILIDAD: valida cupos de paquetes/servicios para la fecha solicitada.
+# TOOL DISPONIBILIDAD: valida cupos de paquetes/servicios para la fecha solicitada.
 def mock_validar_disponibilidad(estado: EstadoCotizacion, options: list[dict]) -> dict:
-    """Valida disponibilidad mock de paquetes para la fecha solicitada."""
-    # MOCK: ESTA TOOL DEBERIA CONSULTAR DISPONIBILIDAD REAL EN EL SISTEMA DE RESERVAS/CALENDARIO O EN UNA TABLA TRANSACCIONAL DE CUPOS POR FECHA.
+    """Valida disponibilidad de paquetes para la fecha solicitada."""
+    # DISPONIBILIDAD: consulta cupos por fecha en calendario o tabla transaccional.
     available_options = []
     opciones_descartadas = []
 
@@ -42,10 +42,10 @@ def mock_validar_disponibilidad(estado: EstadoCotizacion, options: list[dict]) -
     return {"available_options": available_options, "opciones_descartadas": opciones_descartadas}
 
 
-# TOOL MOCK/STOCK: valida inventario por producto y propone alternativas por categoria.
+# TOOL STOCK: valida inventario por producto y propone alternativas por categoria.
 def mock_validar_stock_productos(estado: EstadoCotizacion, requested_items: list[dict], products: list[dict]) -> dict:
-    """Valida stock mock por producto y calcula faltantes con alternativas."""
-    # MOCK: ESTA TOOL DEBERIA CONSULTAR STOCK REAL EN INVENTARIO, ERP O TABLAS TRANSACCIONALES DE DISPONIBILIDAD POR PRODUCTO Y FECHA.
+    """Valida stock por producto y calcula faltantes con alternativas."""
+    # STOCK: consulta inventario por producto y fecha.
     if not estado.fecha_evento:
         return {"available_items": [], "missing_items": requested_items}
 
@@ -57,7 +57,7 @@ def mock_validar_stock_productos(estado: EstadoCotizacion, requested_items: list
     for item in requested_items:
         product = product_by_category.get(item["concept"])
         if not product:
-            missing_items.append({**item, "reason": "No existe producto mock para este concepto."})
+            missing_items.append({**item, "reason": "No existe producto para este concepto."})
             continue
         stock = day_availability.get(product["id"], 0)
         if stock >= item["quantity"]:
@@ -76,7 +76,7 @@ def mock_validar_stock_productos(estado: EstadoCotizacion, requested_items: list
     return {"available_items": available_items, "missing_items": missing_items}
 
 
-# TOOL MOCK/STOCK: busca productos sustitutos disponibles cuando falta stock del pedido exacto.
+# TOOL STOCK: busca productos sustitutos disponibles cuando falta stock del pedido exacto.
 def buscar_alternativas_producto_disponibles(item: dict, products: list[dict], day_availability: dict) -> list[dict]:
     """Busca alternativas de la misma familia con stock disponible."""
     alternatives = []
@@ -99,7 +99,7 @@ def buscar_alternativas_producto_disponibles(item: dict, products: list[dict], d
     return alternatives
 
 
-# TOOL MOCK/CATALOGO: define categorias cercanas para sugerir alternativas sin inventar productos.
+# TOOL CATALOGO: define categorias cercanas para sugerir alternativas sin inventar productos.
 def categorias_alternativas_para(category: str) -> list[str]:
     """Devuelve categorias alternativas configuradas para un producto."""
     if usar_postgres_negocio():

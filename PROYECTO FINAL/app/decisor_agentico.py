@@ -5,7 +5,12 @@ from functools import lru_cache
 from typing import Literal
 
 from app.contratos import ContratoDisponibilidadHerramientas
-from app.guardrails.decision import es_derivacion_humana_explicita, es_solicitud_nueva_cotizacion, es_solicitud_recuperar_memoria
+from app.guardrails.decision import (
+    es_derivacion_humana_explicita,
+    es_solicitud_generar_cotizacion,
+    es_solicitud_nueva_cotizacion,
+    es_solicitud_recuperar_memoria,
+)
 from app.guardrails.capa_intermedia import invocar_agente_con_guardrails, obtener_middleware_langchain_guardrails
 from app.configuracion_llm import obtener_configuracion_llm
 from app.estado import EstadoCotizacion
@@ -57,6 +62,7 @@ def decidir_siguiente_accion_con_agente(mensaje_usuario: str, estado: EstadoCoti
                                 "explicit_handoff_requested": es_solicitud_derivacion_explicita(mensaje_usuario),
                                 "explicit_resume_requested": es_solicitud_recuperar_memoria(mensaje_usuario.lower()),
                                 "explicit_new_quote_requested": es_solicitud_nueva_cotizacion(mensaje_usuario.lower()),
+                                "explicit_generate_quote_requested": es_solicitud_generar_cotizacion(mensaje_usuario.lower(), estado),
                             },
                             ensure_ascii=False,
                         ),
@@ -99,9 +105,14 @@ def crear_agente_decisor():
         explicit_handoff_requested: bool = False,
         explicit_resume_requested: bool = False,
         explicit_new_quote_requested: bool = False,
+        explicit_generate_quote_requested: bool = False,
     ) -> str:
         """Elige accion respetando prerequisitos minimos antes de usar tools."""
         texto = mensaje_usuario.lower()
+        if explicit_generate_quote_requested:
+            if puede_generar_cotizacion:
+                return "generar_cotizacion"
+            return "validar_y_recomendar" if puede_validar_y_recomendar else "pedir_campos_faltantes"
         if explicit_new_quote_requested:
             return "nueva_cotizacion"
         if explicit_resume_requested:
@@ -114,7 +125,7 @@ def crear_agente_decisor():
             return "responder_politica"
         if any(term in texto for term in ["cerrar", "finalizar", "terminar"]):
             return "cierre"
-        if any(term in texto for term in ["genera la cotizacion", "genera la cotización", "cotizalo", "cotízalo"]):
+        if es_solicitud_generar_cotizacion(texto):
             return "generar_cotizacion" if puede_generar_cotizacion else "pedir_campos_faltantes"
         if any(term in texto for term in ["cuanto cuesta", "cuánto cuesta", "precio", "costo"]):
             return "responder_precio" if puede_responder_precio else "pedir_campos_faltantes"
@@ -133,8 +144,8 @@ Solo debes elegir una accion de alto nivel.
 
 CONTEXTO:
 - Recibiras mensaje_usuario, estado, campos_faltantes, disponibilidad_herramientas,
-  explicit_handoff_requested, explicit_resume_requested y
-  explicit_new_quote_requested.
+  explicit_handoff_requested, explicit_resume_requested,
+  explicit_new_quote_requested y explicit_generate_quote_requested.
 - estado es memoria operativa de la cotizacion en curso.
 - disponibilidad_herramientas indica si ya existen prerequisitos para usar herramientas de
   negocio.
@@ -150,6 +161,9 @@ REGLAS IMPORTANTES:
   conversaron, que ya dio/dejo todos sus datos, que ya dio datos antes aunque
   escriba con errores como "enteriormente", o que quiere continuar lo anterior,
   elige retomar_previa aunque no entregue telefono todavia.
+- Si el usuario confirma emitir la propuesta con variantes como "emítela",
+  "dale procede", "haz la proforma", "cotízalo", "cerramos con eso",
+  "ok con esos productos" o frases equivalentes, elige generar_cotizacion.
 - validar_y_recomendar solo si puede_validar_y_recomendar=true.
 - generar_cotizacion solo si puede_generar_cotizacion=true.
 - responder_precio solo si puede_responder_precio=true.

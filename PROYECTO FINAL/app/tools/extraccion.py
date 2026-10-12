@@ -4,7 +4,12 @@ import re
 from datetime import date
 from typing import Any
 
-from app.guardrails.decision import es_solicitud_nueva_cotizacion, es_solicitud_recuperar_memoria
+from app.guardrails.decision import (
+    es_solicitud_generar_cotizacion,
+    es_solicitud_nueva_cotizacion,
+    es_solicitud_recuperar_memoria,
+    validar_override_intencion,
+)
 from app.estado import EstadoCotizacion
 
 
@@ -112,13 +117,10 @@ def extraer_intencion_y_campos(message: str, estado: EstadoCotizacion) -> dict[s
     fields = _fusionar_campos_agenticos(fields, agentic_fields)
     if fields.get("product_changes"):
         intencion = "modify_request"
-    elif intencion not in {"resume_previous", "new_quote", "memory_check", "greeting"} and fields.get("intent_override") in {
-        "modify_request",
-        "review_order",
-        "resume_previous",
-        "new_quote",
-    }:
-        intencion = fields["intent_override"]
+    else:
+        override_validado = validar_override_intencion(fields.get("intent_override"), texto, estado)
+        if intencion not in {"resume_previous", "new_quote", "memory_check", "greeting"} and override_validado:
+            intencion = override_validado
 
     return {"intencion": intencion, "fields": fields}
 
@@ -148,7 +150,7 @@ def _detectar_intencion(texto: str, estado: EstadoCotizacion) -> str:
         return "discount_request"
     if any(term in texto for term in ["pagar", "pago", "separar", "reservar"]):
         return "payment_request"
-    if any(term in texto for term in ["genera la cotizacion", "genera la cotización", "generame la cotizacion", "genérame la cotización", "cotizalo", "cotízalo", "emitir cotizacion", "emitir cotización"]):
+    if es_solicitud_generar_cotizacion(texto, estado):
         return "cotizacion"
     if any(term in texto for term in ["cuanto cuesta", "cuánto cuesta", "precio", "cuanto vale", "cuánto vale", "costo"]):
         return "price_query"
@@ -408,9 +410,9 @@ def _extraer_cambios_productos(texto: str) -> dict[str, list[str]]:
     return {key: unique for key, values in changes.items() if (unique := list(dict.fromkeys(values)))}
 
 
-# VALIDACION DE CATALOGO: separa productos mencionados que no existen en el mock.
+# VALIDACION DE CATALOGO: separa productos mencionados que no existen en el catalogo.
 def _extraer_productos_no_soportados(texto: str, productos_solicitados: list[str]) -> list[str]:
-    """Identifica productos pedidos que no existen en el catalogo mock."""
+    """Identifica productos pedidos que no existen en el catalogo."""
     unsupported_aliases = {
         "whisky": ["whisky", "whiskey"],
         "pisco": ["pisco"],

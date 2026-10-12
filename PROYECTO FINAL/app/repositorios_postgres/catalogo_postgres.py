@@ -6,7 +6,7 @@ from app.repositorios_postgres.conexion import conexion_postgres
 
 # POSTGRES/CATALOGO: consulta paquetes y productos desde tablas jpomm_* sin cambiar la firma de la tool.
 def buscar_catalogo_postgres(estado: EstadoCotizacion) -> dict:
-    """Replica la estructura de catalogo mock usando PostgreSQL como fuente."""
+    """Lee la estructura de catalogo usando PostgreSQL como fuente."""
     paquetes = _listar_paquetes()
     productos = _listar_productos()
     package_options = []
