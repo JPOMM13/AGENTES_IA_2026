@@ -78,11 +78,51 @@ def obtener_grafo_cotizador():
     """Compila y reutiliza el grafo para no reconstruirlo en cada mensaje."""
     grafo = StateGraph(EstadoGrafoCotizador)
 
+    # NODO validar_entrada:
+    # - Que hace: revisa el texto del usuario antes de usar LLM, memoria o tools.
+    # - LLM/system prompt: no usa LLM ni system prompt; es validacion deterministica.
+    # - Tools/BD: no usa tools, Redis, PostgreSQL negocio ni PostgreSQL NoSQL memory.
     grafo.add_node("validar_entrada", validar_entrada)
+
+    # NODO extraer_y_enrutar_intencion:
+    # - Que hace: entiende que quiere el usuario, extrae campos del evento y actualiza EstadoCotizacion.
+    # - LLM: si LLM_ENABLED=true usa OpenAI segun LLM_PROVIDER=openai y LLM_MODEL del .env.
+    # - System prompts: PROMPT_SISTEMA_CLASIFICADOR_INTENCION para intencion y PROMPT_SISTEMA_EXTRACTOR para campos.
+    # - Tools: usa tool interna registrar_campos_extraidos; no ejecuta negocio.
+    # - BD: no consulta Redis, PostgreSQL negocio ni PostgreSQL NoSQL memory.
     grafo.add_node("extraer_y_enrutar_intencion", extraer_y_enrutar_intencion)
+
+    # NODO gestionar_memoria_persistente:
+    # - Que hace: busca cotizaciones anteriores por telefono/correo y resuelve si retomar o seguir con la actual.
+    # - LLM/system prompt: no usa LLM actualmente; la eleccion previa pendiente se valida por codigo.
+    # - Tools: no usa tools agenticas.
+    # - BD: con MEMORY_DATA_SOURCE=postgres consulta PostgreSQL NoSQL memory en memory.jpomm_memoria_cotizaciones.
+    # - Redis/PostgreSQL negocio: no usa Redis ni PostgreSQL negocio en este nodo.
     grafo.add_node("gestionar_memoria_persistente", gestionar_memoria_persistente)
+
+    # NODO decidir_accion_agentica:
+    # - Que hace: decide la siguiente accion del workflow: pedir faltantes, recomendar, cotizar, derivar, etc.
+    # - LLM: si LLM_ENABLED=true usa create_agent con OpenAI segun LLM_PROVIDER=openai.
+    # - System prompt: PROMPT_SISTEMA_DECISOR.
+    # - Tools: usa tool interna elegir_accion_workflow; esa tool solo devuelve una accion permitida.
+    # - BD: no consulta Redis, PostgreSQL negocio ni PostgreSQL NoSQL memory.
     grafo.add_node("decidir_accion_agentica", decidir_accion_agentica)
+
+    # NODO ejecutar_tools_negocio:
+    # - Que hace: ejecuta negocio real: cobertura, calendario, catalogo, stock, RAG, recomendacion, cotizacion e imagen.
+    # - LLM/system prompt: no usa un system prompt propio del nodo; RAG usa embeddings/OpenAI y la imagen depende de IMAGE_GENERATION_ENABLED.
+    # - Tools: si usa tools de negocio del cotizador.
+    # - BD: con BUSINESS_DATA_SOURCE=postgres consulta PostgreSQL negocio; con RAG_THRESHOLD configurado puede consultar RAG.
+    # - Redis/PostgreSQL NoSQL memory: no usa Redis ni memoria persistente en este nodo.
     grafo.add_node("ejecutar_tools_negocio", ejecutar_tools_negocio)
+
+    # NODO evaluar_salida_guardrail:
+    # - Que hace: valida la respuesta final, la pule si corresponde, agrega memoria visible y persiste el turno.
+    # - LLM: si LLM_ENABLED=true puede usar OpenAI para pulido final.
+    # - System prompt: SYSTEM_PROMPT en app/llm.py, limitado a reescribir sin inventar datos.
+    # - Tools: no usa tools de negocio.
+    # - BD: con SESSION_STORE=redis guarda sesion corta en Redis; con MEMORY_DATA_SOURCE=postgres guarda memoria persistente en PostgreSQL NoSQL memory.
+    # - PostgreSQL negocio: no consulta tablas de negocio en este nodo.
     grafo.add_node("evaluar_salida_guardrail", evaluar_salida_guardrail)
 
     # RUTA LANGGRAPH: primero entra el guardrail de entrada; si bloquea, salta a salida segura.

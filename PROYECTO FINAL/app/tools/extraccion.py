@@ -4,6 +4,7 @@ import re
 from datetime import date
 from typing import Any
 
+from app.clasificador_intencion import clasificar_intencion_con_llm
 from app.guardrails.decision import (
     es_solicitud_generar_cotizacion,
     es_solicitud_nueva_cotizacion,
@@ -42,18 +43,19 @@ MONTHS = {
 }
 
 
-# TOOL/EXTRACCION HIBRIDA: combina reglas y agente extractor para obtener intencion y campos del usuario.
+# TOOL/EXTRACCION HIBRIDA: extrae campos por reglas simples y deja la intencion principal al router LLM estructurado.
 def extraer_intencion_y_campos(message: str, estado: EstadoCotizacion) -> dict[str, Any]:
-    """Extrae intencion y campos del mensaje combinando reglas y agente."""
+    """Extrae campos del mensaje y resuelve la intencion con el router agentico."""
     texto = message.lower()
-    intencion = _detectar_intencion(texto, estado)
     fields: dict[str, Any] = {}
 
+    # ROUTER DE INTENCION: primero el LLM interpreta que quiere hacer el usuario.
+    intencion_clasificada = _clasificar_intencion_estructurada(message, estado)
+
+    # EXTRACCION DE CAMPOS: despues de entender la intencion se capturan datos utiles del mensaje.
     product_changes = _extraer_cambios_productos(texto)
     if product_changes:
         fields["product_changes"] = product_changes
-        if intencion == "recomendacion":
-            intencion = "modificar_pedido"
 
     tipo_evento = _extraer_tipo_evento(texto)
     if tipo_evento:
@@ -93,8 +95,6 @@ def extraer_intencion_y_campos(message: str, estado: EstadoCotizacion) -> dict[s
     contacto = _extraer_contacto(message)
     if contacto:
         fields["contacto"] = contacto
-        if estado.intencion == "retomar_previa" and "contacto" in estado.campos_faltantes:
-            intencion = "retomar_previa"
 
     if not fields.get("nombre_cliente") and contacto:
         customer_name_from_contact = _extraer_nombre_cerca_contacto(message, contacto)
@@ -115,54 +115,134 @@ def extraer_intencion_y_campos(message: str, estado: EstadoCotizacion) -> dict[s
 
     agentic_fields = _extraer_campos_con_agente(message, estado)
     fields = _fusionar_campos_agenticos(fields, agentic_fields)
-    if fields.get("product_changes"):
-        intencion = "modificar_pedido"
-    else:
-        override_validado = validar_override_intencion(fields.get("intent_override"), texto, estado)
-        if intencion not in {"retomar_previa", "nueva_cotizacion", "consulta_memoria", "saludo"} and override_validado:
-            intencion = override_validado
+
+    # GUARDRAIL DE INTENCION: valida la intencion del LLM contra campos, contexto y respaldo operativo.
+    intencion = _resolver_intencion_principal(message, estado, fields, intencion_clasificada)
 
     return {"intencion": intencion, "fields": fields}
 
 
-# VALIDACION DE INTENCION: clasifica el mensaje antes de decidir la siguiente accion.
-def _detectar_intencion(texto: str, estado: EstadoCotizacion) -> str:
-    """Clasifica la intencion principal del usuario para dirigir el flujo."""
-    if es_solicitud_nueva_cotizacion(texto):
-        return "nueva_cotizacion"
-    if es_solicitud_recuperar_memoria(texto):
-        return "retomar_previa"
-    if any(term in texto for term in ["retomar", "continuar", "seguir"]) and any(
-        term in texto for term in ["cotizacion", "cotización", "pedido", "conversacion", "conversación", "solicitud", "sesion", "sesión", "session", "datos"]
-    ):
-        return "retomar_previa"
-    if _es_solo_saludo(texto):
-        return "saludo"
-    if any(term in texto for term in ["ya te di mi nombre", "ya di mi nombre", "te di mi nombre"]):
-        return "consulta_memoria"
-    if any(term in texto for term in ["imagen", "foto", "visual", "muéstrame", "muestrame", "ver como"]):
-        return "solicitud_imagen"
-    if any(term in texto for term in ["cerrar", "finalizar", "terminar conversacion", "terminar conversación"]):
-        return "cierre"
-    if any(term in texto for term in ["asesor", "humano", "whatsapp", "derivame", "derívame"]):
-        return "derivacion_humana"
-    if any(term in texto for term in ["descuento", "rebaja", "menos precio"]):
-        return "solicitud_descuento"
-    if any(term in texto for term in ["pagar", "pago", "separar", "reservar"]):
-        return "solicitud_pago"
-    if es_solicitud_generar_cotizacion(texto, estado):
-        return "cotizacion"
-    if any(term in texto for term in ["cuanto cuesta", "cuánto cuesta", "precio", "cuanto vale", "cuánto vale", "costo"]):
-        return "consulta_precio"
-    if estado.derivacion_ofrecida and any(term in texto for term in ["si", "sí", "ok", "dale", "acepto"]):
-        return "confirmacion_derivacion"
-    if any(term in texto for term in ["revisar pedido", "ver pedido", "mi pedido", "resumen del pedido", "qué tengo", "que tengo"]):
-        return "revisar_pedido"
-    if any(term in texto for term in ["cambiar", "modificar", "quitar", "sacar", "sin ", "reemplaza", "reemplázalo", "reemplazalo", "reemplazar", "otra fecha", "otro distrito"]):
+# ROUTER DE INTENCION: usa el LLM estructurado como ruta principal y reglas solo como respaldo si el LLM no responde.
+def _resolver_intencion_principal(
+    mensaje_usuario: str,
+    estado: EstadoCotizacion,
+    fields: dict[str, Any],
+    intencion_clasificada: str | None,
+) -> str:
+    """Elige la intencion final con clasificacion LLM y guardrails de seguridad."""
+    texto = mensaje_usuario.lower()
+    if fields.get("product_changes"):
         return "modificar_pedido"
-    if any(term in texto for term in ["politica", "política", "feriado", "anticipacion", "anticipación"]):
-        return "consulta_general"
+    if estado.intencion == "retomar_previa" and "contacto" in estado.campos_faltantes and fields.get("contacto"):
+        return "retomar_previa"
+
+    if intencion_clasificada:
+        return _proteger_intencion_clasificada(intencion_clasificada, fields)
+
+    override_validado = validar_override_intencion(fields.get("intent_override"), texto, estado)
+    if override_validado:
+        return override_validado
+
+    return _resolver_intencion_respaldo(texto, estado)
+
+
+# ROUTER DE INTENCION: clasifica cualquier mensaje con LLM estructurado, evitando listas rigidas de frases como ruta principal.
+def _clasificar_intencion_estructurada(mensaje_usuario: str, estado: EstadoCotizacion) -> str | None:
+    """Clasifica la intencion con el LLM y descarta respuestas con baja confianza."""
+    resultado = clasificar_intencion_con_llm(mensaje_usuario, estado)
+    if not resultado:
+        return None
+    if resultado.confianza < 0.35:
+        estado.registrar_log(
+            "clasificador_intencion_descartado",
+            {
+                "intencion": resultado.intencion,
+                "confianza": resultado.confianza,
+                "motivo": "confianza_baja",
+            },
+        )
+        return None
+    return resultado.intencion
+
+
+# GUARDRAIL DE RESPALDO: solo se usa si el LLM esta apagado o falla; no es el router principal del agente.
+def _resolver_intencion_respaldo(texto: str, estado: EstadoCotizacion) -> str:
+    """Resuelve intenciones criticas sin LLM para pruebas locales y resiliencia operativa."""
+    reglas_respaldo = (
+        (lambda: es_solicitud_nueva_cotizacion(texto), "nueva_cotizacion"),
+        (lambda: es_solicitud_recuperar_memoria(texto), "retomar_previa"),
+        (lambda: _es_retomar_contextual(texto), "retomar_previa"),
+        (lambda: _es_solo_saludo(texto), "saludo"),
+        (lambda: _contiene_alguna(texto, ["ya te di mi nombre", "ya di mi nombre", "te di mi nombre"]), "consulta_memoria"),
+        (lambda: _contiene_alguna(texto, ["imagen", "foto", "visual", "muéstrame", "muestrame", "ver como"]), "solicitud_imagen"),
+        (lambda: _contiene_alguna(texto, ["cerrar", "finalizar", "terminar conversacion", "terminar conversación"]), "cierre"),
+        (lambda: _contiene_alguna(texto, ["asesor", "humano", "whatsapp", "derivame", "derívame"]), "derivacion_humana"),
+        (lambda: _contiene_alguna(texto, ["descuento", "rebaja", "menos precio"]), "solicitud_descuento"),
+        (lambda: es_solicitud_generar_cotizacion(texto, estado), "cotizacion"),
+        (lambda: _contiene_alguna(texto, ["pagar", "pago", "separar", "reservar"]), "solicitud_pago"),
+        (lambda: _contiene_alguna(texto, ["cuanto cuesta", "cuánto cuesta", "precio", "cuanto vale", "cuánto vale", "costo"]), "consulta_precio"),
+        (lambda: estado.derivacion_ofrecida and _contiene_alguna(texto, ["si", "sí", "ok", "dale", "acepto"]), "confirmacion_derivacion"),
+        (lambda: _contiene_alguna(texto, ["revisar pedido", "ver pedido", "mi pedido", "resumen del pedido", "qué tengo", "que tengo"]), "revisar_pedido"),
+        (lambda: _contiene_alguna(texto, ["cambiar", "modificar", "quitar", "sacar", "sin ", "reemplaza", "reemplázalo", "reemplazalo", "reemplazar", "otra fecha", "otro distrito"]), "modificar_pedido"),
+        (lambda: _contiene_alguna(texto, ["politica", "política", "feriado", "anticipacion", "anticipación"]), "consulta_general"),
+    )
+    for cumple_regla, intencion in reglas_respaldo:
+        if cumple_regla():
+            estado.registrar_log("router_intencion_respaldo", {"intencion": intencion})
+            return intencion
+    estado.registrar_log("router_intencion_respaldo", {"intencion": "recomendacion"})
     return "recomendacion"
+
+
+# GUARDRAIL DE RESPALDO: reconoce retomar por contexto solo cuando no hubo clasificacion LLM disponible.
+def _es_retomar_contextual(texto: str) -> bool:
+    """Detecta continuidad de conversacion previa como respaldo deterministico."""
+    return _contiene_alguna(texto, ["retomar", "continuar", "seguir"]) and _contiene_alguna(
+        texto,
+        [
+            "cotizacion",
+            "cotización",
+            "pedido",
+            "conversacion",
+            "conversación",
+            "solicitud",
+            "sesion",
+            "sesión",
+            "session",
+            "datos",
+        ],
+    )
+
+
+# UTILIDAD DE GUARDRAIL: centraliza busqueda de terminos para que el respaldo no sea una cadena de if/else.
+def _contiene_alguna(texto: str, terminos: list[str]) -> bool:
+    """Indica si el texto contiene alguna senal definida por guardrails."""
+    return any(termino in texto for termino in terminos)
+
+
+# GUARDRAIL DE ROUTER: evita que una etiqueta del LLM pierda datos explicitos de cotizacion.
+def _proteger_intencion_clasificada(intencion_llm: str, fields: dict[str, Any]) -> str:
+    """Corrige clasificaciones incompatibles con datos de negocio extraidos."""
+    hay_datos_cotizacion = any(
+        fields.get(key)
+        for key in [
+            "tipo_evento",
+            "asistentes",
+            "fecha_evento",
+            "fecha_parcial",
+            "distrito",
+            "presupuesto",
+            "nombre_cliente",
+            "contacto",
+            "preferencias",
+            "productos_solicitados",
+            "productos_solicitados_no_soportados",
+        ]
+    )
+    if hay_datos_cotizacion and intencion_llm in {"saludo", "consulta_general", "consulta_memoria", "cierre"}:
+        return "recomendacion"
+    return intencion_llm
+
 
 # VALIDACION CONVERSACIONAL: detecta saludos sin datos de cotizacion.
 def _es_solo_saludo(texto: str) -> bool:
