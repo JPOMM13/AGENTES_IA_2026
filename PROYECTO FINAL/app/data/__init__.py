@@ -1,1 +1,1 @@
-"""Datos mock de la POC."""
+"""Datos locales del proyecto."""

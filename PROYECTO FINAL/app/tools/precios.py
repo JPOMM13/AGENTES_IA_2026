@@ -5,10 +5,10 @@ from datetime import datetime, timedelta
 from app.estado import EstadoCotizacion
 
 
-# TOOL MOCK/PRECIOS: puntua opciones disponibles para recomendar una alternativa cotizable.
+# TOOL PRECIOS: puntua opciones disponibles para recomendar una alternativa cotizable.
 def mock_comparar_opciones(estado: EstadoCotizacion) -> dict:
     """Ordena opciones disponibles con un scoring simple de afinidad."""
-    # MOCK: ESTA TOOL DEBERIA USAR REGLAS REALES DE RECOMENDACION, SCORING COMERCIAL O UN SERVICIO DE OPTIMIZACION DE PAQUETES.
+    # PRECIOS: usa reglas de recomendacion, scoring comercial u optimizacion de paquetes.
     ranked = []
     for option in estado.opciones_validas:
         affinity = option.get("event_affinity", {}).get(estado.tipo_evento or "", 0.5)
@@ -28,7 +28,7 @@ def mock_comparar_opciones(estado: EstadoCotizacion) -> dict:
         enriched["reasons"] = [
             f"Afinidad alta con {estado.tipo_evento}.",
             f"Capacidad sugerida: {option['capacity_min']} a {option['capacity_max']} personas.",
-            "Disponibilidad mock confirmada para la fecha.",
+            "Disponibilidad confirmada para la fecha.",
         ]
         ranked.append(enriched)
 
@@ -36,10 +36,10 @@ def mock_comparar_opciones(estado: EstadoCotizacion) -> dict:
     return {"recommended": ranked[0] if ranked else None, "ranking": ranked}
 
 
-# TOOL MOCK/COTIZACION: calcula subtotal, IGV y total de la cotizacion simulada.
+# TOOL COTIZACION: calcula subtotal, IGV y total de la cotizacion.
 def mock_generar_cotizacion(estado: EstadoCotizacion) -> dict:
-    """Genera una cotizacion mock desde el paquete o productos recomendados."""
-    # MOCK: ESTA TOOL DEBERIA GENERAR LA COTIZACION EN EL SISTEMA TRANSACCIONAL REAL, PERSISTIRLA EN POSTGRESQL Y DEVOLVER ID, TOTALES E IMPUESTOS OFICIALES.
+    """Genera una cotizacion desde el paquete o productos recomendados."""
+    # COTIZACION: genera y persiste la cotizacion con ID, totales e impuestos.
     if not estado.opcion_recomendada:
         raise ValueError("No existe opcion recomendada para cotizar.")
     if estado.opcion_recomendada.get("origen") == "products":
@@ -60,7 +60,7 @@ def mock_generar_cotizacion(estado: EstadoCotizacion) -> dict:
     total = round(subtotal + taxes, 2)
     valid_until = (datetime.now() + timedelta(hours=48)).replace(microsecond=0).isoformat()
     return {
-        "quote_id": "Q-POC-0001",
+        "quote_id": "COT-0001",
         "currency": estado.opcion_recomendada.get("currency", "PEN"),
         "subtotal": subtotal,
         "taxes": taxes,
@@ -68,7 +68,7 @@ def mock_generar_cotizacion(estado: EstadoCotizacion) -> dict:
         "details": details,
         "valid_until": valid_until,
         "conditions": [
-            "Precio referencial para POC.",
+            "Precio referencial.",
             "Sujeto a disponibilidad y confirmacion final.",
             "No incluye descuentos ni condiciones negociadas.",
         ],

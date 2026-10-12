@@ -36,7 +36,7 @@ def test_disponibilidad_descarta_opcion_no_disponible():
 def test_dimensionamiento_devuelve_regla_versionada():
     estado = EstadoCotizacion(asistentes=100, productos_solicitados=["vino", "hielo"])
     resultado = mock_dimensionar_evento(estado)
-    assert resultado["rule_id"] == "DIM-POC-001"
+    assert resultado["rule_id"] == "DIM-001"
     assert [item["concept"] for item in resultado["items"]] == ["vino", "hielo"]
 
 

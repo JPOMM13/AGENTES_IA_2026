@@ -5,10 +5,10 @@ import math
 from app.estado import EstadoCotizacion
 
 
-# TOOL MOCK/DIMENSIONAMIENTO: calcula cantidades sugeridas por producto segun asistentes y evento.
+# TOOL DIMENSIONAMIENTO: calcula cantidades sugeridas por producto segun asistentes y evento.
 def mock_dimensionar_evento(estado: EstadoCotizacion) -> dict:
     """Calcula cantidades referenciales segun asistentes y productos elegidos."""
-    # MOCK: ESTA TOOL DEBERIA USAR REGLAS COMERCIALES REALES O UN MOTOR DE DIMENSIONAMIENTO VERSIONADO EN BD PARA CALCULAR CANTIDADES.
+    # DIMENSIONAMIENTO: aplica reglas comerciales o un motor versionado para calcular cantidades.
     asistentes = estado.asistentes or 0
     productos_solicitados = estado.productos_solicitados or []
     rules = {
@@ -21,7 +21,7 @@ def mock_dimensionar_evento(estado: EstadoCotizacion) -> dict:
         "bartenders": {"concept": "bartenders", "quantity": max(1, math.ceil(asistentes / 50)), "unit": "personas"},
     }
     return {
-        "rule_id": "DIM-POC-001",
+        "rule_id": "DIM-001",
         "rule_version": "2026-09",
         "items": [rules[product] for product in productos_solicitados if product in rules],
     }

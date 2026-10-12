@@ -128,6 +128,8 @@ REGLAS IMPORTANTES:
   cerveza, vino, ron, agua, gaseosa, hielo, bartenders, bar movil.
 - preferences_csv puede incluir economico, premium, formal, sencillo, separadas
   por coma. No pongas productos aqui.
+- Si el usuario quiere generar, emitir, proceder, cerrar con la propuesta o
+  pedir una proforma/cotizacion formal, usa intent_override=generate_quote.
 - Si el usuario quiere revisar, cambiar, agregar o quitar productos, usa
   intent_override=review_order o intent_override=modify_request.
 - Si el usuario dice que quiere otra/nueva cotizacion, otro numero, otro
@@ -217,7 +219,7 @@ def normalizar_campos_extraidos(carga: dict[str, Any], mensaje_usuario: str) -> 
         fields["productos_solicitados"] = productos_solicitados
 
     intent_override = limpiar_texto(carga.get("intent_override")).lower()
-    if intent_override in {"modify_request", "review_order", "resume_previous", "new_quote"}:
+    if intent_override in {"modify_request", "review_order", "resume_previous", "new_quote", "generate_quote"}:
         fields["intent_override"] = intent_override
 
     product_changes = normalizar_cambios_productos(carga, mensaje_usuario)

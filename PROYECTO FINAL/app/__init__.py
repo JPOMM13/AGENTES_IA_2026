@@ -1,1 +1,1 @@
-"""POC workflow agentico para cotizaciones de eventos."""
+"""Workflow agentico para cotizaciones de eventos."""

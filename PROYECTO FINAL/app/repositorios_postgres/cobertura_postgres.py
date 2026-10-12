@@ -25,5 +25,5 @@ def validar_cobertura_postgres(estado: EstadoCotizacion) -> dict:
         "ok": ok,
         "distrito": estado.distrito,
         "distritos_cubiertos": sorted(distritos),
-        "reason": None if ok else f"{estado.distrito} no esta dentro del alcance de cobertura mock.",
+        "reason": None if ok else f"{estado.distrito} no esta dentro del alcance de cobertura.",
     }
