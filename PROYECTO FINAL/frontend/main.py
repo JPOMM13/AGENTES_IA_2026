@@ -57,7 +57,8 @@ with boton:
             st.error(str(error))
 
 with st.container(border=True, key="chat_completo"):
-    with st.container(height=350, border=False, autoscroll=True):
+    caja_mensajes = st.container(height=350, border=False, autoscroll=True, key="historial_chat")
+    with caja_mensajes:
         mensajes = respuesta.get("mensajes", [])
         if "hora_saludo" not in st.session_state:
             st.session_state.hora_saludo = datetime.now().strftime("%d/%m/%Y · %H:%M")
@@ -68,21 +69,23 @@ with st.container(border=True, key="chat_completo"):
             with st.chat_message(mensaje["role"]):
                 st.markdown(mensaje["content"])
                 st.caption(st.session_state.horas_mensajes[indice])
+                if indice == len(mensajes) - 1 and mensaje["role"] == "assistant":
+                    renderizar_tarjeta_cotizacion(respuesta)
+                    renderizar_tarjeta_imagen(respuesta)
 
     texto = st.chat_input("Escribe tu mensaje...")
     if texto:
+        # Mostramos el mensaje antes de esperar la respuesta de la API.
+        with caja_mensajes:
+            with st.chat_message("user"):
+                st.markdown(texto)
+                st.caption(datetime.now().strftime("%d/%m/%Y · %H:%M"))
         try:
             with st.spinner("Preparando respuesta..."):
                 guardar_respuesta(enviar_mensaje_api(respuesta["id_sesion"], texto))
             st.rerun()
         except ErrorApiCotizador as error:
             st.error(f"No se pudo enviar el mensaje: {error}")
-
-with st.expander("¿Qué puedo preguntar?"):
-    st.write("Por ejemplo: Necesito bebidas para un matrimonio de 100 personas en Miraflores.")
-
-renderizar_tarjeta_cotizacion(respuesta)
-renderizar_tarjeta_imagen(respuesta)
 
 with st.sidebar.expander("Datos técnicos"):
     st.json(respuesta.get("estado_panel", {}))

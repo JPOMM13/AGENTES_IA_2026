@@ -12,11 +12,12 @@ def renderizar_tarjeta_cotizacion(respuesta):
 
     moneda = "S/" if cotizacion.get("currency") == "PEN" else cotizacion.get("currency", "")
     with st.container(border=True):
-        st.subheader("Cotización")
-        st.metric("Total", f"{moneda} {cotizacion['total']:,.2f}")
-        st.write(f"Subtotal: {moneda} {cotizacion['subtotal']:,.2f}")
-        st.write(f"IGV: {moneda} {cotizacion['taxes']:,.2f}")
-        st.caption(f"Vigencia: {cotizacion['valid_until']}")
+        st.markdown(f"**Cotización · {moneda} {cotizacion['total']:,.2f}**")
+        st.caption(
+            f"Subtotal: {moneda} {cotizacion['subtotal']:,.2f} · "
+            f"IGV: {moneda} {cotizacion['taxes']:,.2f} · "
+            f"Vigencia: {cotizacion['valid_until']}"
+        )
         with st.expander("Ver detalle"):
             for item in cotizacion.get("details", []):
                 nombre = item.get("product_name") or item.get("concept", "Producto")
@@ -32,8 +33,7 @@ def renderizar_tarjeta_imagen(respuesta):
     if not respuesta.get("cotizacion") or not ruta:
         return
 
-    with st.container(border=True):
-        st.subheader("Imagen del evento")
+    with st.expander("Ver imagen del evento"):
         if ruta.startswith(("http://", "https://")) or Path(ruta).is_file():
             st.image(ruta, use_container_width=True)
         else:
