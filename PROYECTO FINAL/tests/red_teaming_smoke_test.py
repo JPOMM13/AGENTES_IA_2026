@@ -26,7 +26,7 @@ _PROYECTO_ROOT = Path(__file__).resolve().parents[1]
 if str(_PROYECTO_ROOT) not in sys.path:
     sys.path.insert(0, str(_PROYECTO_ROOT))
 
-from tests.eventos_agent import agent_invoke, agent_invoke_sesion, nueva_sesion
+from tests.red_teaming_eventos_agent import agent_invoke, agent_invoke_sesion, nueva_sesion
 from app.cliente_api import ErrorApiCotizador, crear_sesion_api
 
 

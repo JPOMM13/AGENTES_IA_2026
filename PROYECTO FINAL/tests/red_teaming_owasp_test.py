@@ -28,7 +28,7 @@ from deepteam.attacks.single_turn import (
 )
 
 #from eventos_agent import agent_invoke
-from tests.eventos_agent import agent_invoke
+from tests.red_teaming_eventos_agent import agent_invoke
 
 # ── Directorio de resultados ─────────────────────────────────────────────────
 
