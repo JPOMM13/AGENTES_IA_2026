@@ -52,8 +52,8 @@ def extraer_intencion_y_campos(message: str, estado: EstadoCotizacion) -> dict[s
     product_changes = _extraer_cambios_productos(texto)
     if product_changes:
         fields["product_changes"] = product_changes
-        if intencion == "recommendation":
-            intencion = "modify_request"
+        if intencion == "recomendacion":
+            intencion = "modificar_pedido"
 
     tipo_evento = _extraer_tipo_evento(texto)
     if tipo_evento:
@@ -93,8 +93,8 @@ def extraer_intencion_y_campos(message: str, estado: EstadoCotizacion) -> dict[s
     contacto = _extraer_contacto(message)
     if contacto:
         fields["contacto"] = contacto
-        if estado.intencion == "resume_previous" and "contacto" in estado.campos_faltantes:
-            intencion = "resume_previous"
+        if estado.intencion == "retomar_previa" and "contacto" in estado.campos_faltantes:
+            intencion = "retomar_previa"
 
     if not fields.get("nombre_cliente") and contacto:
         customer_name_from_contact = _extraer_nombre_cerca_contacto(message, contacto)
@@ -116,10 +116,10 @@ def extraer_intencion_y_campos(message: str, estado: EstadoCotizacion) -> dict[s
     agentic_fields = _extraer_campos_con_agente(message, estado)
     fields = _fusionar_campos_agenticos(fields, agentic_fields)
     if fields.get("product_changes"):
-        intencion = "modify_request"
+        intencion = "modificar_pedido"
     else:
         override_validado = validar_override_intencion(fields.get("intent_override"), texto, estado)
-        if intencion not in {"resume_previous", "new_quote", "memory_check", "greeting"} and override_validado:
+        if intencion not in {"retomar_previa", "nueva_cotizacion", "consulta_memoria", "saludo"} and override_validado:
             intencion = override_validado
 
     return {"intencion": intencion, "fields": fields}
@@ -129,46 +129,46 @@ def extraer_intencion_y_campos(message: str, estado: EstadoCotizacion) -> dict[s
 def _detectar_intencion(texto: str, estado: EstadoCotizacion) -> str:
     """Clasifica la intencion principal del usuario para dirigir el flujo."""
     if es_solicitud_nueva_cotizacion(texto):
-        return "new_quote"
+        return "nueva_cotizacion"
     if es_solicitud_recuperar_memoria(texto):
-        return "resume_previous"
+        return "retomar_previa"
     if any(term in texto for term in ["retomar", "continuar", "seguir"]) and any(
         term in texto for term in ["cotizacion", "cotización", "pedido", "conversacion", "conversación", "solicitud", "sesion", "sesión", "session", "datos"]
     ):
-        return "resume_previous"
+        return "retomar_previa"
     if _es_solo_saludo(texto):
-        return "greeting"
+        return "saludo"
     if any(term in texto for term in ["ya te di mi nombre", "ya di mi nombre", "te di mi nombre"]):
-        return "memory_check"
+        return "consulta_memoria"
     if any(term in texto for term in ["imagen", "foto", "visual", "muéstrame", "muestrame", "ver como"]):
-        return "image_request"
+        return "solicitud_imagen"
     if any(term in texto for term in ["cerrar", "finalizar", "terminar conversacion", "terminar conversación"]):
-        return "close"
+        return "cierre"
     if any(term in texto for term in ["asesor", "humano", "whatsapp", "derivame", "derívame"]):
-        return "human_handoff"
+        return "derivacion_humana"
     if any(term in texto for term in ["descuento", "rebaja", "menos precio"]):
-        return "discount_request"
+        return "solicitud_descuento"
     if any(term in texto for term in ["pagar", "pago", "separar", "reservar"]):
-        return "payment_request"
+        return "solicitud_pago"
     if es_solicitud_generar_cotizacion(texto, estado):
         return "cotizacion"
     if any(term in texto for term in ["cuanto cuesta", "cuánto cuesta", "precio", "cuanto vale", "cuánto vale", "costo"]):
-        return "price_query"
+        return "consulta_precio"
     if estado.derivacion_ofrecida and any(term in texto for term in ["si", "sí", "ok", "dale", "acepto"]):
-        return "handoff_confirmation"
+        return "confirmacion_derivacion"
     if any(term in texto for term in ["revisar pedido", "ver pedido", "mi pedido", "resumen del pedido", "qué tengo", "que tengo"]):
-        return "review_order"
+        return "revisar_pedido"
     if any(term in texto for term in ["cambiar", "modificar", "quitar", "sacar", "sin ", "reemplaza", "reemplázalo", "reemplazalo", "reemplazar", "otra fecha", "otro distrito"]):
-        return "modify_request"
+        return "modificar_pedido"
     if any(term in texto for term in ["politica", "política", "feriado", "anticipacion", "anticipación"]):
-        return "general_question"
-    return "recommendation"
+        return "consulta_general"
+    return "recomendacion"
 
 # VALIDACION CONVERSACIONAL: detecta saludos sin datos de cotizacion.
 def _es_solo_saludo(texto: str) -> bool:
     """Distingue un saludo simple de una solicitud de cotizacion."""
     cleaned = re.sub(r"[^\wáéíóúñ ]+", " ", texto.lower()).strip()
-    quote_signals = [
+    senales_cotizacion = [
         "cotizacion",
         "cotización",
         "evento",
@@ -189,8 +189,8 @@ def _es_solo_saludo(texto: str) -> bool:
         "conversacion",
         "conversación",
     ]
-    greeting_signals = ["hola", "buenos dias", "buenos días", "buenas tardes", "buenas noches", "que tal", "qué tal"]
-    return any(signal in cleaned for signal in greeting_signals) and not any(signal in cleaned for signal in quote_signals)
+    senales_saludo = ["hola", "buenos dias", "buenos días", "buenas tardes", "buenas noches", "que tal", "qué tal"]
+    return any(senal in cleaned for senal in senales_saludo) and not any(senal in cleaned for senal in senales_cotizacion)
 
 
 # EXTRACCION REGLADA: obtiene tipo de evento desde patrones simples.
