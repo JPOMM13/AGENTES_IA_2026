@@ -39,6 +39,18 @@ def validar_decision_agentica(accion: str | None, mensaje_usuario: str, estado: 
         )
         return "resume_previous"
 
+    if es_solicitud_generar_cotizacion(texto):
+        decision_validada = "pedir_campos_faltantes"
+        motivo = "cotizacion_sin_minimos"
+        if not estado.campos_faltantes:
+            decision_validada = "generate_quote" if estado.opcion_recomendada else "validate_and_recommend"
+            motivo = "cotizacion_explicita"
+        estado.registrar_log(
+            "guardrail_decision_agentica",
+            {"decision_original": accion, "decision_validada": decision_validada, "motivo": motivo},
+        )
+        return decision_validada  # type: ignore[return-value]
+
     if accion == "handoff" and not es_derivacion_humana_explicita(texto):
         estado.registrar_log(
             "guardrail_decision_agentica",
@@ -167,6 +179,24 @@ def es_solicitud_recuperar_memoria(texto: str) -> bool:
         r"\bquiero\s+continuarla\b",
     ]
     return any(re.search(patron, texto) for patron in patrones)
+
+
+# VALIDACION DE INTENCION: detecta una orden explicita de emitir la cotizacion.
+def es_solicitud_generar_cotizacion(texto: str) -> bool:
+    """Detecta si el usuario ya confirmo que quiere generar la cotizacion."""
+    frases = [
+        "genera la cotizacion",
+        "genera la cotización",
+        "generame la cotizacion",
+        "genérame la cotización",
+        "cotizalo",
+        "cotízalo",
+        "emitir cotizacion",
+        "emitir cotización",
+        "genera mi cotizacion",
+        "genera mi cotización",
+    ]
+    return any(frase in texto for frase in frases)
 
 
 # GUARDRAIL DE DERIVACION: permite derivar a humano solo si el usuario lo pide explicitamente.

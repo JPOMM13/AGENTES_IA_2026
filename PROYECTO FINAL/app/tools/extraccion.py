@@ -381,6 +381,12 @@ def _extraer_productos_solicitados(texto: str) -> list[str]:
     return requested
 
 
+# EXTRACCION/PRODUCTOS: expone la deteccion reglada para guardrails del workflow.
+def extraer_productos_mencionados(mensaje_usuario: str) -> list[str]:
+    """Devuelve productos concretos mencionados explicitamente en el turno."""
+    return _extraer_productos_solicitados(mensaje_usuario.lower())
+
+
 # EXTRACCION REGLADA: detecta agregar, quitar o reemplazar productos en el pedido.
 def _extraer_cambios_productos(texto: str) -> dict[str, list[str]]:
     """Detecta acciones de agregar, quitar o reemplazar productos."""

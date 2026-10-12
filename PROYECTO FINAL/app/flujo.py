@@ -14,7 +14,7 @@ from app.tools.catalogo import mock_buscar_catalogo
 from app.tools.calendario import mock_registrar_evento_cotizado, mock_validar_calendario_eventos
 from app.tools.cobertura import mock_validar_cobertura
 from app.tools.dimensionamiento import mock_dimensionar_evento
-from app.tools.extraccion import extraer_intencion_y_campos
+from app.tools.extraccion import extraer_intencion_y_campos, extraer_productos_mencionados
 from app.tools.derivacion import mock_derivar_whatsapp
 from app.tools.precios import mock_comparar_opciones, mock_generar_cotizacion
 from app.tools.consulta_rag import buscar_rag
@@ -38,9 +38,11 @@ def manejar_mensaje(mensaje_usuario: str, estado: EstadoCotizacion) -> tuple[str
 def preparar_turno_usuario(mensaje_usuario: str, estado: EstadoCotizacion) -> EstadoCotizacion:
     """Registra el mensaje, extrae intencion/campos y actualiza memoria operativa."""
     estado.mensajes.append({"role": "user", "content": mensaje_usuario})
+    campos_faltantes_antes = list(estado.campos_faltantes)
     extraction = extraer_intencion_y_campos(mensaje_usuario, estado)
     estado.registrar_log("extraer_intencion_y_campos", extraction)
     fusionar_extraccion_en_estado(estado, extraction)
+    asegurar_productos_mencionados_si_eran_faltantes(mensaje_usuario, estado, campos_faltantes_antes)
     estado.campos_faltantes = encontrar_campos_faltantes(estado)
     estado.registrar_log("tool_readiness", obtener_disponibilidad_tools(mensaje_usuario, estado))
     return estado
@@ -271,6 +273,29 @@ def fusionar_extraccion_en_estado(estado: EstadoCotizacion, extraction: dict) ->
         estado.opciones_validas = []
         estado.opciones_descartadas = []
         estado.dimensionamiento = None
+
+
+# GUARDRAIL DE PRODUCTOS: si el flujo pidio productos y el usuario los dio, no deja que el LLM los ignore.
+def asegurar_productos_mencionados_si_eran_faltantes(
+    mensaje_usuario: str,
+    estado: EstadoCotizacion,
+    campos_faltantes_antes: list[str],
+) -> None:
+    """Guarda productos concretos dados como respuesta directa al pedido de productos."""
+    if "productos_solicitados" not in campos_faltantes_antes:
+        return
+    productos_mencionados = extraer_productos_mencionados(mensaje_usuario)
+    if not productos_mencionados:
+        return
+    for producto in productos_mencionados:
+        if producto not in estado.productos_solicitados:
+            estado.productos_solicitados.append(producto)
+    if estado.intencion in {"review_order", "modify_request"}:
+        estado.intencion = "recommendation"
+    estado.registrar_log(
+        "guardrail_productos_mencionados",
+        {"productos_agregados": productos_mencionados, "motivo": "respuesta_a_productos_faltantes"},
+    )
 
 
 # MEMORIA TEMPORAL: reinicia datos de cotizacion cuando el usuario pide una nueva solicitud.

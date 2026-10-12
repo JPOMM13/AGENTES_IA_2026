@@ -396,6 +396,29 @@ def test_productos_faltantes_lista_catalogo_para_elegir():
     assert estado.opcion_recomendada is None
 
 
+# Prueba que una respuesta directa con productos no se pierda aunque el LLM clasifique revision.
+def test_productos_directos_se_guardan_aunque_agente_proponga_revision(monkeypatch):
+    estado = EstadoCotizacion(
+        tipo_evento="matrimonio",
+        asistentes=30,
+        fecha_evento="2027-02-05",
+        distrito="Miraflores",
+        nombre_cliente="John Manchego",
+        contacto="989515182",
+    )
+    estado.campos_faltantes = ["productos_solicitados"]
+    monkeypatch.setattr(
+        extraction_tools,
+        "_extraer_campos_con_agente",
+        lambda mensaje, estado: {"intent_override": "review_order"},
+    )
+
+    respuesta, estado = manejar_mensaje("vino y hielo.", estado)
+
+    assert estado.productos_solicitados == ["vino", "hielo"]
+    assert "sin productos/servicios elegidos todavia" not in respuesta
+
+
 # Prueba el comportamiento de test usuario puede revisar y modificar productos antes cotizar.
 def test_usuario_puede_revisar_y_modificar_productos_antes_cotizar():
     estado = EstadoCotizacion()
