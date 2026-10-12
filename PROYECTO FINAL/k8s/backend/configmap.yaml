@@ -1,0 +1,38 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: eventos-backend-config
+  namespace: eventos
+data:
+  COTIZADOR_NO_SOBRESCRIBIR_ENV: "true"
+  LLM_ENABLED: "true"
+  LLM_PROVIDER: "openai"
+  LLM_MODEL: "gpt-4o-mini"
+  LLM_HOST: ""
+  LLM_TEMPERATURE: "0.3"
+  LLM_MAX_OUTPUT_TOKENS: "350"
+  LLM_TIMEOUT_SECONDS: "30"
+  IMAGE_GENERATION_ENABLED: "false"
+  IMAGE_PROVIDER: "openai"
+  IMAGE_MODEL: "gpt-image-1"
+  IMAGE_SIZE: "1024x1024"
+  IMAGE_QUALITY: "high"
+  IMAGE_TIMEOUT_SECONDS: "60"
+  LANGSMITH_TRACING: "false"
+  LANGSMITH_PROJECT: "utec-agente-eventos"
+  LANGSMITH_ENDPOINT: "https://api.smith.langchain.com"
+  BUSINESS_DATA_SOURCE: "postgres"
+  POSTGRES_HOST: "34.176.55.43"
+  POSTGRES_PORT: "5432"
+  POSTGRES_DB: "eventos"
+  POSTGRES_SCHEMA: "negocio"
+  POSTGRES_SSLMODE: "verify-ca"
+  POSTGRES_SSLROOTCERT: "/app/certs/server-ca.pem"
+  POSTGRES_SSLCERT: "/app/certs/client-cert.pem"
+  POSTGRES_SSLKEY: "/app/certs/client-key.pem"
+  MEMORY_DATA_SOURCE: "postgres"
+  POSTGRES_MEMORY_SCHEMA: "memory"
+  SESSION_STORE: "redis"
+  REDIS_SESSION_TTL_SECONDS: "86400"
+  EMBEDDING_MODEL: "text-embedding-3-small"
+  RAG_THRESHOLD: "0.25"

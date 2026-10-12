@@ -1,0 +1,16 @@
+.git
+.idea
+.pytest_cache
+.venv
+__pycache__
+*.pyc
+.DS_Store
+.env
+.env.*
+certs
+entrega-john/.env
+entrega-john/certs
+tests
+docs
+evals
+scripts/postgres
