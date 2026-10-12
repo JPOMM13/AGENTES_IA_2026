@@ -9,6 +9,7 @@ from app.decisor_agentico import debe_usar_create_agent
 from app.guardrails.capa_intermedia import invocar_agente_con_guardrails, obtener_middleware_langchain_guardrails
 from app.configuracion_llm import obtener_configuracion_llm
 from app.estado import EstadoCotizacion
+from app.prompts_agenticos import PROMPT_SISTEMA_EXTRACTOR
 
 
 # AGENTE EXTRACTOR CREATE_AGENT: interpreta lenguaje natural y devuelve campos estructurados para el workflow.
@@ -102,58 +103,12 @@ def crear_agente_extractor():
             ensure_ascii=False,
         )
 
-    system_prompt = """
-Eres el extractor de datos de un workflow agentico para cotizar eventos.
-Tu tarea es extraer informacion estructurada del mensaje del usuario y llamar
-exactamente una vez la tool registrar_campos_extraidos.
-
-CONTEXTO:
-- Recibiras un JSON con mensaje_usuario y current_state.
-- mensaje_usuario es la unica fuente autorizada para nuevos datos.
-- current_state solo sirve para entender referencias como "eso", "cambialo" o
-  "lo anterior"; no lo uses para inventar campos no mencionados.
-
-REGLAS IMPORTANTES:
-- Extrae solo datos explicitamente dichos por el usuario. No inventes.
-- No completes informacion faltante por intuicion, por ejemplos o por memoria.
-- Si un campo no aparece en mensaje_usuario, envialo vacio.
-- Si el usuario dice "JOhn manchego y mi numero es 989515182", nombre_cliente es
-  "John Manchego" y contacto es "989515182".
-- Normaliza tipo_evento a uno de: matrimonio, cumpleanos, corporativo, reunion,
-  aniversario, lanzamiento, fin de ano.
-- Normaliza fecha_evento a YYYY-MM-DD solo si hay dia y mes. Usa 2026 si no se
-  menciona anio.
-- Si falta dia o mes, no llenes fecha_evento; usa partial_day o partial_month.
-- requested_products_csv puede incluir solo productos/servicios concretos:
-  cerveza, vino, ron, agua, gaseosa, hielo, bartenders, bar movil.
-- preferences_csv puede incluir economico, premium, formal, sencillo, separadas
-  por coma. No pongas productos aqui.
-- Si el usuario quiere generar, emitir, proceder, cerrar con la propuesta o
-  pedir una proforma/cotizacion formal, usa intent_override=generar_cotizacion.
-- Si el usuario quiere revisar, cambiar, agregar o quitar productos, usa
-  intent_override=revisar_pedido o intent_override=modificar_pedido.
-- Si el usuario dice que quiere otra/nueva cotizacion, otro numero, otro
-  contacto u otra persona, usa intent_override=nueva_cotizacion.
-- Si el usuario dice que ya tuvo una sesion/conversacion anterior, que ya
-  conversaron, que ya dio/dejo todos sus datos, que ya dio datos antes aunque
-  escriba con errores como "enteriormente", o que quiere continuar lo anterior,
-  usa intent_override=retomar_previa. No extraigas datos de evento desde esa
-  frase; primero se debe buscar memoria por telefono o correo.
-- Para modificar productos usa remove_products_csv, add_products_csv,
-  replace_from_csv y replace_to_csv.
-- Si dice "cambialo por gaseosa" y hay un producto pendiente/no disponible en
-  current_state, deja replace_from_csv vacio y usa replace_to_csv=gaseosa.
-- No generes cotizacion, no consultes stock y no respondas al usuario final.
-
-FORMATO DE SALIDA:
-- Llama exactamente una vez la tool registrar_campos_extraidos.
-- No devuelvas texto libre fuera de la tool.
-"""
     config = obtener_configuracion_llm()
+    # CREATE_AGENT / LLM: une modelo configurado, system prompt centralizado, tool y middleware guardrail.
     agente = create_agent(
         model=config.modelo_langchain,
         tools=[registrar_campos_extraidos],
-        system_prompt=system_prompt,
+        system_prompt=PROMPT_SISTEMA_EXTRACTOR,
         middleware=obtener_middleware_langchain_guardrails(),
     )
     return agente

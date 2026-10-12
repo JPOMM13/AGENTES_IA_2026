@@ -14,6 +14,7 @@ from app.guardrails.decision import (
 from app.guardrails.capa_intermedia import invocar_agente_con_guardrails, obtener_middleware_langchain_guardrails
 from app.configuracion_llm import obtener_configuracion_llm
 from app.estado import EstadoCotizacion
+from app.prompts_agenticos import PROMPT_SISTEMA_DECISOR
 
 
 DecisionAgente = Literal[
@@ -137,52 +138,12 @@ def crear_agente_decisor():
             return "cierre"
         return "validar_y_recomendar" if puede_validar_y_recomendar else "pedir_campos_faltantes"
 
-    system_prompt = """
-Eres el modulo decisor de un workflow agentico de cotizaciones de eventos.
-Tu tarea NO es cotizar, NO es inventar datos y NO es responder comercialmente.
-Solo debes elegir una accion de alto nivel.
-
-CONTEXTO:
-- Recibiras mensaje_usuario, estado, campos_faltantes, disponibilidad_herramientas,
-  solicito_derivar, solicito_recuperar_memoria, solicito_empezar_otro_pedido
-  y solicito_emitir_propuesta.
-- estado es memoria operativa de la cotizacion en curso.
-- disponibilidad_herramientas indica si ya existen prerequisitos para usar herramientas de
-  negocio.
-
-REGLAS IMPORTANTES:
-- Usa la tool elegir_accion_workflow.
-- Devuelve exactamente una de estas acciones: pedir_campos_faltantes,
-  responder_precio, validar_y_recomendar, generar_cotizacion, mostrar_imagen, derivacion,
-  responder_politica, cierre, retomar_previa, nueva_cotizacion.
-- Si el usuario indica que quiere otra/nueva cotizacion, otro numero, otro
-  contacto u otra persona, elige nueva_cotizacion.
-- Si el usuario indica que ya tuvo una sesion/conversacion anterior, que ya
-  conversaron, que ya dio/dejo todos sus datos, que ya dio datos antes aunque
-  escriba con errores como "enteriormente", o que quiere continuar lo anterior,
-  elige retomar_previa aunque no entregue telefono todavia.
-- Si el usuario confirma emitir la propuesta con variantes como "emítela",
-  "dale procede", "haz la proforma", "cotízalo", "cerramos con eso",
-  "ok con esos productos" o frases equivalentes, elige generar_cotizacion.
-- validar_y_recomendar solo si puede_validar_y_recomendar=true.
-- generar_cotizacion solo si puede_generar_cotizacion=true.
-- responder_precio solo si puede_responder_precio=true.
-- mostrar_imagen solo si puede_mostrar_imagen=true.
-- derivacion solo si solicito_derivar=true.
-- Si faltan datos minimos, elige pedir_campos_faltantes.
-- Si el usuario solo revisa o modifica datos, no elijas generar_cotizacion.
-- No asumas productos, fechas, cantidades ni intenciones no dichas.
-
-FORMATO DE SALIDA:
-- Llama exactamente una vez la tool elegir_accion_workflow.
-- No agregues explicaciones ni texto final para el usuario.
-- El workflow deterministico ejecutara las validaciones reales despues.
-"""
     config = obtener_configuracion_llm()
+    # CREATE_AGENT / LLM: une modelo configurado, system prompt centralizado, tool y middleware guardrail.
     agente = create_agent(
         model=config.modelo_langchain,
         tools=[elegir_accion_workflow],
-        system_prompt=system_prompt,
+        system_prompt=PROMPT_SISTEMA_DECISOR,
         middleware=obtener_middleware_langchain_guardrails(),
     )
     return agente
