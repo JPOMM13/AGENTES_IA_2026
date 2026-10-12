@@ -68,47 +68,27 @@ def llamar_llm(system_prompt: str, user_prompt: str, config: ConfiguracionLLM) -
         return ""
 
 
-# CLIENTE LLM: arma payload compatible con OpenAI, Anthropic u Ollama segun configuracion.
+# CLIENTE LLM: arma payload compatible con OpenAI Responses.
 def construir_payload_chat(system_prompt: str, user_prompt: str, config: ConfiguracionLLM) -> dict:
-    """Construye el carga segun el proveedor definido en variables de entorno."""
+    """Construye la carga para OpenAI Responses."""
     mensajes = [
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": user_prompt},
     ]
-    if config.proveedor == "ollama":
-        return {
-            "model": config.model,
-            "messages": mensajes,
-            "stream": False,
-            "options": {"temperature": config.temperatura},
-        }
-    if config.proveedor == "openai":
-        return {
-            "model": config.model,
-            "input": mensajes,
-            "temperature": config.temperatura,
-            "max_output_tokens": config.max_tokens_salida,
-        }
-    if config.proveedor == "anthropic":
-        return {
-            "model": config.model,
-            "system": system_prompt,
-            "messages": [{"role": "user", "content": user_prompt}],
-            "temperature": config.temperatura,
-            "max_tokens": config.max_tokens_salida,
-        }
-    return {"model": config.model, "messages": mensajes, "temperature": config.temperatura}
+    return {
+        "model": config.model,
+        "input": mensajes,
+        "temperature": config.temperatura,
+        "max_output_tokens": config.max_tokens_salida,
+    }
 
 
-# CLIENTE LLM: arma headers HTTP y credenciales segun proveedor configurado.
+# CLIENTE LLM: arma headers HTTP con credenciales de OpenAI.
 def construir_headers(config: ConfiguracionLLM) -> dict[str, str]:
-    """Construye headers HTTP segun el proveedor configurado."""
+    """Construye headers HTTP para OpenAI."""
     headers = {"Content-Type": "application/json"}
-    if config.proveedor == "openai" and config.clave_api:
+    if config.clave_api:
         headers["Authorization"] = f"Bearer {config.clave_api}"
-    if config.proveedor == "anthropic" and config.clave_api:
-        headers["x-api-key"] = config.clave_api
-        headers["anthropic-version"] = "2023-06-01"
     return headers
 
 
@@ -142,13 +122,9 @@ def construir_prompt_pulido(respuesta_base: str, estado: EstadoCotizacion) -> st
     )
 
 
-# CLIENTE LLM: extrae texto desde formatos de respuesta de cada proveedor.
+# CLIENTE LLM: extrae texto desde la respuesta de OpenAI.
 def extraer_texto_respuesta(data: dict, config: ConfiguracionLLM) -> str:
-    """Extrae texto desde la respuesta del proveedor configurado."""
-    if config.proveedor == "ollama":
-        return data.get("message", {}).get("content", "")
-    if config.proveedor == "anthropic":
-        return "".join(part.get("text", "") for part in data.get("content", []) if part.get("type") == "text")
+    """Extrae texto desde la respuesta de OpenAI Responses o Chat Completions."""
     if data.get("output_text"):
         return data["output_text"]
     chunks: list[str] = []

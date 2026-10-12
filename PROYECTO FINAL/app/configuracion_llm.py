@@ -21,37 +21,23 @@ class ConfiguracionLLM:
     max_tokens_salida: int = 350
     segundos_timeout: int = 30
 
-    # CONFIGURACION LLM: adapta el modelo al formato que espera LangChain create_agent.
+    # CONFIGURACION LLM: adapta el modelo OpenAI al formato que espera LangChain create_agent.
     @property
     def modelo_langchain(self) -> str:
         """Devuelve el identificador de modelo esperado por LangChain."""
-        if self.proveedor == "ollama":
-            return f"ollama:{self.model}"
-        if self.proveedor == "openai":
-            return f"openai:{self.model}"
-        if self.proveedor == "anthropic":
-            return f"anthropic:{self.model}"
-        return self.model
+        return f"openai:{self.model}"
 
-    # CONFIGURACION LLM: resuelve el endpoint de chat segun proveedor configurado.
+    # CONFIGURACION LLM: resuelve el endpoint de chat de OpenAI.
     @property
     def url_chat(self) -> str:
-        """Devuelve el endpoint HTTP de chat/texto para el proveedor activo."""
-        if self.proveedor == "ollama":
-            return f"{(self.host or host_por_defecto_para(self.proveedor) or '').rstrip('/')}/api/chat"
-        if self.proveedor == "openai":
-            return "https://api.openai.com/v1/responses"
-        if self.proveedor == "anthropic":
-            return "https://api.anthropic.com/v1/messages"
-        if self.host:
-            return self.host
-        raise ValueError(f"Proveedor LLM no soportado: {self.proveedor}")
+        """Devuelve el endpoint HTTP de OpenAI Responses."""
+        return "https://api.openai.com/v1/responses"
 
-    # CONFIGURACION LLM: indica si el proveedor necesita clave externa o es local.
+    # CONFIGURACION LLM: OpenAI requiere API key.
     @property
     def requiere_api_key(self) -> bool:
         """Indica si el proveedor configurado requiere API key."""
-        return self.proveedor in {"openai", "anthropic"}
+        return True
 
 
 @dataclass(frozen=True)
@@ -80,11 +66,11 @@ class ConfiguracionGeneracionImagen:
         return self.habilitado and self.proveedor == "openai" and bool(self.clave_api)
 
 
-# CONFIGURACION LLM: centraliza proveedor, modelo y parametros para cambiar entre Ollama/OpenAI/Anthropic.
+# CONFIGURACION LLM: centraliza modelo y parametros de OpenAI para todo el agente.
 def obtener_configuracion_llm() -> ConfiguracionLLM:
-    """Lee variables de entorno y arma una configuracion unica de LLM."""
+    """Lee variables de entorno y arma una configuracion unica de OpenAI."""
     cargar_archivo_env()
-    proveedor = os.getenv("LLM_PROVIDER", "ollama").lower()
+    proveedor = normalizar_proveedor_llm(os.getenv("LLM_PROVIDER", "openai").lower())
     return ConfiguracionLLM(
         habilitado=os.getenv("LLM_ENABLED", "true").lower() in {"1", "true", "yes"},
         proveedor=proveedor,
@@ -113,15 +99,10 @@ def obtener_configuracion_generacion_imagen() -> ConfiguracionGeneracionImagen:
     )
 
 
-# CONFIGURACION LLM: define modelo por defecto segun proveedor cuando no viene en .env.
+# CONFIGURACION LLM: define modelo OpenAI por defecto cuando no viene en .env.
 def modelo_por_defecto_para(proveedor: str) -> str:
-    """Define el modelo por defecto para cada proveedor soportado."""
-    defaults = {
-        "ollama": "llama3.2:latest",
-        "openai": "gpt-4o-mini",
-        "anthropic": "claude-3-5-haiku-latest",
-    }
-    return defaults.get(proveedor, "llama3.2:latest")
+    """Define el modelo por defecto del proveedor activo."""
+    return "gpt-4o-mini"
 
 
 # CONFIGURACION MULTIMODAL: define modelo de imagen por defecto segun proveedor.
@@ -133,23 +114,22 @@ def modelo_imagen_por_defecto_para(proveedor: str) -> str:
     return defaults.get(proveedor, "gpt-image-1")
 
 
-# CONFIGURACION LLM: define endpoint local o remoto segun proveedor.
+# CONFIGURACION LLM: se mantiene por compatibilidad, pero OpenAI no requiere host local.
 def host_por_defecto_para(proveedor: str) -> str | None:
     """Define host por defecto cuando el proveedor requiere endpoint local."""
-    if proveedor == "ollama":
-        return "http://127.0.0.1:11434"
     return None
 
 
-# CONFIGURACION LLM: lee la API key solo para proveedores que la requieren.
+# CONFIGURACION LLM: lee la API key de OpenAI.
 def api_key_para(proveedor: str) -> str | None:
-    """Busca la API key esperada por proveedor en variables de entorno."""
-    env_by_provider = {
-        "openai": "OPENAI_API_KEY",
-        "anthropic": "ANTHROPIC_API_KEY",
-    }
-    env_name = env_by_provider.get(proveedor)
-    return os.getenv(env_name) if env_name else None
+    """Busca la API key esperada por OpenAI en variables de entorno."""
+    return os.getenv("OPENAI_API_KEY")
+
+
+# CONFIGURACION LLM: fuerza OpenAI como proveedor unico operativo del proyecto.
+def normalizar_proveedor_llm(proveedor: str) -> str:
+    """Mantiene compatibilidad con LLM_PROVIDER, pero ejecuta siempre OpenAI."""
+    return "openai"
 
 
 # CONFIGURACION LLM: carga variables del archivo .env sin depender de valores hardcodeados.

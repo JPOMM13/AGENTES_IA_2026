@@ -14,6 +14,11 @@ from app.estado import EstadoCotizacion
 from app.ui.componentes import renderizar_tarjeta_imagen, renderizar_tarjeta_cotizacion, renderizar_panel_estado
 
 
+# FRONTEND LEGACY:
+# Este Streamlit vive dentro de app/ y se conserva por compatibilidad.
+# El frontend separado recomendado es frontend/main.py.
+# Igual que el frontend nuevo, esta pantalla no ejecuta el agente directamente:
+# llama al backend FastAPI por HTTP mediante app.cliente_api.
 st.set_page_config(page_title="Workflow agentico de eventos", page_icon="WF", layout="wide")
 
 st.title("Workflow agentico para cotizacion de eventos")
@@ -28,21 +33,34 @@ def cargar_estado_desde_respuesta(respuesta_api: dict) -> EstadoCotizacion:
 
 try:
     if "id_sesion" not in st.session_state:
+        # FRONTEND LEGACY / CREACION DE SESION:
+        # Si Streamlit no tiene id_sesion, llama POST /api/sesiones al backend.
+        # El backend crea EstadoCotizacion limpio y lo guarda como sesion activa.
+        # Con SESSION_STORE=redis, ese guardado se hace en Redis con TTL.
         respuesta_inicial = crear_sesion_api()
         st.session_state.id_sesion = respuesta_inicial["id_sesion"]
         st.session_state.estado_api = respuesta_inicial["estado"]
     else:
+        # FRONTEND LEGACY / RECUPERACION DE SESION:
+        # Si ya existe id_sesion en st.session_state, llama GET /api/sesiones/{id_sesion}.
+        # El backend recupera la sesion activa mediante RepositorioSesionActiva.obtener.
+        # Con SESSION_STORE=redis, esa recuperacion lee la key:
+        # cotizador:eventos:sesion:{id_sesion}
         respuesta_actual = consultar_sesion_api(st.session_state.id_sesion)
         st.session_state.estado_api = respuesta_actual["estado"]
 except ErrorApiCotizador as error:
     st.error(str(error))
-    st.info("Levanta primero el backend con: uvicorn app.api:aplicacion --reload --port 8000")
+    st.info("Levanta primero el backend con: uvicorn app.api:aplicacion --reload --port 9090")
     st.stop()
 
 estado: EstadoCotizacion = cargar_estado_desde_respuesta({"estado": st.session_state.estado_api})
 
 if st.sidebar.button("Reiniciar conversacion"):
     try:
+        # FRONTEND LEGACY / REINICIO:
+        # Llama POST /api/sesiones/{id_sesion}/reiniciar.
+        # El backend borra la sesion anterior; con SESSION_STORE=redis elimina la key Redis.
+        # Luego crea y guarda una nueva sesion limpia.
         respuesta_reinicio = reiniciar_sesion_api(estado.id_sesion)
         st.session_state.id_sesion = respuesta_reinicio["id_sesion"]
         st.session_state.estado_api = respuesta_reinicio["estado"]
@@ -61,6 +79,11 @@ if prompt:
     with st.chat_message("user"):
         st.markdown(prompt)
     try:
+        # FRONTEND LEGACY / CHAT:
+        # Envia POST /api/chat con id_sesion + mensaje.
+        # El backend primero recupera la sesion activa por id_sesion.
+        # Con SESSION_STORE=redis, esa recuperacion lee Redis antes de ejecutar LangGraph.
+        # Al finalizar el flujo, el backend vuelve a guardar el EstadoCotizacion actualizado en Redis.
         respuesta_api = enviar_mensaje_api(estado.id_sesion, prompt)
         st.session_state.id_sesion = respuesta_api["id_sesion"]
         st.session_state.estado_api = respuesta_api["estado"]

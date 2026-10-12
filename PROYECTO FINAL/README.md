@@ -22,32 +22,32 @@ La POC ahora esta separada en dos procesos:
 Primero levanta el backend:
 
 ```bash
-uvicorn app.api:aplicacion --reload --port 8000
+uvicorn app.api:aplicacion --reload --host 0.0.0.0 --port 9090
 ```
 
 Luego, en otra terminal con el mismo entorno virtual activo, levanta Streamlit:
 
 ```bash
-streamlit run frontend/main.py
+streamlit run frontend/main.py --server.port 8000
 ```
 
 Luego abre la URL local que muestre Streamlit, normalmente:
 
 ```text
-http://localhost:8501
+http://localhost:8000
 ```
 
 Si quieres usar otro puerto o host para la API, configura:
 
 ```bash
-export COTIZADOR_API_URL="http://127.0.0.1:8000"
+export COTIZADOR_API_URL="http://127.0.0.1:9090"
 ```
 
 Probar el backend directamente:
 
 ```bash
-curl -X POST http://127.0.0.1:8000/api/sesiones
-curl -X POST http://127.0.0.1:8000/api/chat \
+curl -X POST http://127.0.0.1:9090/api/sesiones
+curl -X POST http://127.0.0.1:9090/api/chat \
   -H "Content-Type: application/json" \
   -d '{"id_sesion":"ID_DEVUELTO_POR_API","mensaje":"Necesito cotizar un matrimonio para 50 personas"}'
 ```
@@ -185,43 +185,16 @@ Si `MEMORY_DATA_SOURCE=mock` o `SESSION_STORE=mock`, el proyecto sigue usando lo
 
 ## Configurar LLM
 
-La POC usa una configuracion unica para el LLM. Con esto cambias de Ollama a OpenAI o Anthropic sin tocar el codigo.
+El proyecto usa OpenAI como proveedor operativo del LLM.
 
-La ejecucion del LLM esta centralizada en `app/llm.py` con un unico metodo (`call_llm`). El proveedor se cambia solo por variables de entorno.
+La ejecucion del LLM esta centralizada en `app/llm.py` con un unico metodo (`llamar_llm`). La configuracion de modelo y credenciales se lee desde variables de entorno.
 
-Puedes configurar el proveedor editando `.env` en la raiz del proyecto. `.env.example` queda como plantilla.
-
-Ollama local:
-
-```env
-LLM_ENABLED=true
-LLM_PROVIDER=ollama
-LLM_MODEL=llama3.2:latest
-LLM_HOST=http://127.0.0.1:11434
-LLM_API_KEY=
-```
-
-Ollama no requiere API key, pero si requiere tener el servicio local activo. Por defecto usa:
-
-```bash
-LLM_HOST=http://127.0.0.1:11434
-```
-
-OpenAI:
+Puedes configurar OpenAI editando `.env` en la raiz del proyecto. `.env.example` queda como plantilla.
 
 ```env
 LLM_ENABLED=true
 LLM_PROVIDER=openai
 LLM_MODEL=gpt-4o-mini
-LLM_API_KEY=...
-```
-
-Anthropic:
-
-```env
-LLM_ENABLED=true
-LLM_PROVIDER=anthropic
-LLM_MODEL=claude-3-5-haiku-latest
 LLM_API_KEY=...
 ```
 
@@ -404,8 +377,8 @@ Con LLM activo, usando la configuracion actual de proveedor/modelo:
 
 ```bash
 export LLM_ENABLED=true
-export LLM_PROVIDER=ollama
-export LLM_MODEL="llama3.2:latest"
+export LLM_PROVIDER=openai
+export LLM_MODEL="gpt-4o-mini"
 .venv/bin/python evals/run_evals.py --with-llm
 ```
 

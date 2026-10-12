@@ -18,6 +18,10 @@ st.markdown(f"<style>{(RAIZ / 'estilos.css').read_text(encoding='utf-8')}</style
 
 
 def guardar_respuesta(respuesta):
+    # FRONTEND / SESION:
+    # Streamlit solo conserva el id_sesion y la ultima respuesta renderizable.
+    # La conversacion completa no se recupera desde aqui; cuando el frontend envia id_sesion,
+    # el backend usa ese identificador para buscar la sesion activa en Redis si SESSION_STORE=redis.
     st.session_state.id_sesion = respuesta["id_sesion"]
     st.session_state.respuesta_api = respuesta
 
@@ -35,8 +39,17 @@ def guardar_respuesta(respuesta):
 
 try:
     if "id_sesion" in st.session_state:
+        # FRONTEND / RECUPERACION DE SESION:
+        # Si Streamlit ya tiene id_sesion, llama GET /api/sesiones/{id_sesion}.
+        # En el backend, ese endpoint usa RepositorioSesionActiva.obtener(id_sesion).
+        # Con SESSION_STORE=redis, esa llamada recupera desde Redis la key:
+        # cotizador:eventos:sesion:{id_sesion}
         guardar_respuesta(consultar_sesion_api(st.session_state.id_sesion))
     else:
+        # FRONTEND / CREACION DE SESION:
+        # Si no hay id_sesion en Streamlit, llama POST /api/sesiones.
+        # El backend crea EstadoCotizacion limpio y lo guarda como sesion activa.
+        # Con SESSION_STORE=redis, esa sesion inicial se guarda en Redis con TTL.
         guardar_respuesta(crear_sesion_api())
 except ErrorApiCotizador as error:
     st.error(f"No se pudo conectar con el agente: {error}")
@@ -50,6 +63,10 @@ with titulo:
 with boton:
     if st.button("Nueva conversación", use_container_width=True):
         try:
+            # FRONTEND / REINICIO:
+            # Llama POST /api/sesiones/{id_sesion}/reiniciar.
+            # En backend se elimina la sesion anterior; con SESSION_STORE=redis se borra la key de Redis.
+            # Luego el backend crea y guarda una sesion nueva.
             guardar_respuesta(reiniciar_sesion_api(respuesta["id_sesion"]))
             st.session_state.hora_saludo = datetime.now().strftime("%d/%m/%Y · %H:%M")
             st.rerun()
@@ -82,6 +99,11 @@ with st.container(border=True, key="chat_completo"):
                 st.caption(datetime.now().strftime("%d/%m/%Y · %H:%M"))
         try:
             with st.spinner("Preparando respuesta..."):
+                # FRONTEND / CHAT:
+                # Envia POST /api/chat con id_sesion + mensaje.
+                # El backend primero recupera la sesion activa por id_sesion.
+                # Con SESSION_STORE=redis, esa recuperacion lee Redis antes de ejecutar LangGraph.
+                # Al terminar el flujo, el backend vuelve a guardar el estado actualizado en Redis.
                 guardar_respuesta(enviar_mensaje_api(respuesta["id_sesion"], texto))
             st.rerun()
         except ErrorApiCotizador as error:

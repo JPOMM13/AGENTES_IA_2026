@@ -1,0 +1,26 @@
+---
+config:
+  flowchart:
+    curve: linear
+---
+graph TD;
+	__start__([<p>__start__</p>]):::first
+	validar_entrada(validar_entrada)
+	extraer_y_enrutar_intencion(extraer_y_enrutar_intencion)
+	gestionar_memoria_persistente(gestionar_memoria_persistente)
+	decidir_accion_agentica(decidir_accion_agentica)
+	ejecutar_tools_negocio(ejecutar_tools_negocio)
+	evaluar_salida_guardrail(evaluar_salida_guardrail)
+	__end__([<p>__end__</p>]):::last
+	__start__ --> validar_entrada;
+	decidir_accion_agentica --> ejecutar_tools_negocio;
+	ejecutar_tools_negocio --> evaluar_salida_guardrail;
+	extraer_y_enrutar_intencion --> gestionar_memoria_persistente;
+	gestionar_memoria_persistente -. &nbsp;continuar&nbsp; .-> decidir_accion_agentica;
+	gestionar_memoria_persistente -. &nbsp;finalizar&nbsp; .-> evaluar_salida_guardrail;
+	validar_entrada -. &nbsp;finalizar&nbsp; .-> evaluar_salida_guardrail;
+	validar_entrada -. &nbsp;continuar&nbsp; .-> extraer_y_enrutar_intencion;
+	evaluar_salida_guardrail --> __end__;
+	classDef default fill:#f2f0ff,line-height:1.2
+	classDef first fill-opacity:0
+	classDef last fill:#bfb6fc
