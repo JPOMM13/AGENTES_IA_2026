@@ -17,21 +17,26 @@ from app.estado import EstadoCotizacion
 
 # GUARDRAIL MIDDLEWARE CREATE_AGENT: configura PIIMiddleware nativo para entradas del agente.
 def obtener_middleware_langchain_guardrails() -> list:
-    """Devuelve middlewares nativos para pasarlos directamente a create_agent."""
+    """
+    Devuelve middlewares nativos para pasarlos directamente a create_agent.
+
+    DECISION DE DISENO:
+    - Correo electronico (email): PERMITIDO — es un dato de contacto requerido para la cotizacion.
+    - Telefono: PERMITIDO — es un dato de contacto requerido para la cotizacion.
+    - Nombre del cliente: PERMITIDO — requerido para personalizar la cotizacion.
+    - Tarjetas de credito: ENMASCARADO — no son necesarias para cotizar; protegemos al usuario.
+    - API keys: BLOQUEADO — nunca deben circular por el workflow del agente.
+    """
     return [
-        # Redacta correos antes de enviar el mensaje al modelo.
-        PIIMiddleware(
-            "email",
-            strategy="redact",
-            apply_to_input=True,
-        ),
-        # Enmascara tarjetas antes de enviar el mensaje al modelo.
+        # Enmascara numeros de tarjeta antes de enviar el mensaje al modelo.
+        # Los datos de pago no son necesarios para cotizar bebidas.
         PIIMiddleware(
             "credit_card",
             strategy="mask",
             apply_to_input=True,
         ),
         # Bloquea posibles API keys antes de enviar el mensaje al modelo.
+        # Una API key en el chat es siempre un error del usuario; la protegemos.
         PIIMiddleware(
             "api_key",
             detector=r"sk-[a-zA-Z0-9_-]{20,}",
