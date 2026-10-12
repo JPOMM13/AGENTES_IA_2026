@@ -59,10 +59,10 @@ def decidir_siguiente_accion_con_agente(mensaje_usuario: str, estado: EstadoCoti
                                 "estado": estado.a_diccionario_panel(),
                                 "campos_faltantes": estado.campos_faltantes,
                                 "disponibilidad_herramientas": disponibilidad,
-                                "explicit_handoff_requested": es_solicitud_derivacion_explicita(mensaje_usuario),
-                                "explicit_resume_requested": es_solicitud_recuperar_memoria(mensaje_usuario.lower()),
-                                "explicit_new_quote_requested": es_solicitud_nueva_cotizacion(mensaje_usuario.lower()),
-                                "explicit_generate_quote_requested": es_solicitud_generar_cotizacion(mensaje_usuario.lower(), estado),
+                                "solicito_derivar": es_solicitud_derivacion_explicita(mensaje_usuario),
+                                "solicito_recuperar_memoria": es_solicitud_recuperar_memoria(mensaje_usuario.lower()),
+                                "solicito_empezar_otro_pedido": es_solicitud_nueva_cotizacion(mensaje_usuario.lower()),
+                                "solicito_emitir_propuesta": es_solicitud_generar_cotizacion(mensaje_usuario.lower(), estado),
                             },
                             ensure_ascii=False,
                         ),
@@ -102,24 +102,24 @@ def crear_agente_decisor():
         puede_validar_y_recomendar: bool,
         puede_generar_cotizacion: bool,
         puede_mostrar_imagen: bool,
-        explicit_handoff_requested: bool = False,
-        explicit_resume_requested: bool = False,
-        explicit_new_quote_requested: bool = False,
-        explicit_generate_quote_requested: bool = False,
+        solicito_derivar: bool = False,
+        solicito_recuperar_memoria: bool = False,
+        solicito_empezar_otro_pedido: bool = False,
+        solicito_emitir_propuesta: bool = False,
     ) -> str:
         """Elige accion respetando prerequisitos minimos antes de usar tools."""
         texto = mensaje_usuario.lower()
-        if explicit_generate_quote_requested:
+        if solicito_emitir_propuesta:
             if puede_generar_cotizacion:
                 return "generar_cotizacion"
             return "validar_y_recomendar" if puede_validar_y_recomendar else "pedir_campos_faltantes"
-        if explicit_new_quote_requested:
+        if solicito_empezar_otro_pedido:
             return "nueva_cotizacion"
-        if explicit_resume_requested:
+        if solicito_recuperar_memoria:
             return "retomar_previa"
         if any(term in texto for term in ["imagen", "foto", "visual"]):
             return "mostrar_imagen" if puede_mostrar_imagen else "pedir_campos_faltantes"
-        if explicit_handoff_requested:
+        if solicito_derivar:
             return "derivacion"
         if any(term in texto for term in ["politica", "feriado", "anticipacion", "anticipación"]):
             return "responder_politica"
@@ -144,8 +144,8 @@ Solo debes elegir una accion de alto nivel.
 
 CONTEXTO:
 - Recibiras mensaje_usuario, estado, campos_faltantes, disponibilidad_herramientas,
-  explicit_handoff_requested, explicit_resume_requested,
-  explicit_new_quote_requested y explicit_generate_quote_requested.
+  solicito_derivar, solicito_recuperar_memoria, solicito_empezar_otro_pedido
+  y solicito_emitir_propuesta.
 - estado es memoria operativa de la cotizacion en curso.
 - disponibilidad_herramientas indica si ya existen prerequisitos para usar herramientas de
   negocio.
@@ -168,7 +168,7 @@ REGLAS IMPORTANTES:
 - generar_cotizacion solo si puede_generar_cotizacion=true.
 - responder_precio solo si puede_responder_precio=true.
 - mostrar_imagen solo si puede_mostrar_imagen=true.
-- handoff solo si explicit_handoff_requested=true.
+- derivacion solo si solicito_derivar=true.
 - Si faltan datos minimos, elige pedir_campos_faltantes.
 - Si el usuario solo revisa o modifica datos, no elijas generar_cotizacion.
 - No asumas productos, fechas, cantidades ni intenciones no dichas.
@@ -188,34 +188,25 @@ FORMATO DE SALIDA:
     return agente
 
 
-# VALIDACION DE SALIDA AGENTICA: convierte texto o tool output del LLM en una accion interna permitida.
-def normalizar_decision(content: str) -> DecisionAgente | None:
+# VALIDACION DE SALIDA AGENTICA: extrae una accion permitida escrita en español por el agente.
+def extraer_accion_permitida(content: str) -> DecisionAgente | None:
     """Extrae una accion valida desde texto o salida de tool."""
-    equivalencias = {
-        "pedir_campos_faltantes": "pedir_campos_faltantes",
-        "responder_precio": "answer_price",
-        "answer_price": "answer_price",
-        "validar_y_recomendar": "validate_and_recommend",
-        "validate_and_recommend": "validate_and_recommend",
-        "generar_cotizacion": "generate_quote",
-        "generate_quote": "generate_quote",
-        "mostrar_imagen": "show_image",
-        "show_image": "show_image",
-        "derivacion": "handoff",
-        "handoff": "handoff",
-        "responder_politica": "answer_policy",
-        "answer_policy": "answer_policy",
-        "cierre": "close",
-        "close": "close",
-        "retomar_previa": "resume_previous",
-        "resume_previous": "resume_previous",
-        "nueva_cotizacion": "new_quote",
-        "new_quote": "new_quote",
+    acciones_permitidas = {
+        "pedir_campos_faltantes",
+        "responder_precio",
+        "validar_y_recomendar",
+        "generar_cotizacion",
+        "mostrar_imagen",
+        "derivacion",
+        "responder_politica",
+        "cierre",
+        "retomar_previa",
+        "nueva_cotizacion",
     }
     texto = content.strip().lower()
-    for accion, normalizada in equivalencias.items():
+    for accion in acciones_permitidas:
         if accion in texto:
-            return normalizada  # type: ignore[return-value]
+            return accion  # type: ignore[return-value]
     return None
 
 
@@ -226,7 +217,7 @@ def extraer_decision_de_mensajes(mensajes: list) -> DecisionAgente | None:
     # business facts; the tool output is the constrained accion contract.
     for message in reversed(mensajes):
         content = getattr(message, "content", "")
-        decision = normalizar_decision(str(content))
+        decision = extraer_accion_permitida(str(content))
         if decision:
             return decision
     return None

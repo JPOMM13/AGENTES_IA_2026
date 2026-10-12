@@ -81,56 +81,56 @@ def ejecutar_decision_negocio(mensaje_usuario: str, estado: EstadoCotizacion) ->
         respuesta = renderizar_respuesta_validacion_campos(estado)
         return respuesta, estado, "validacion_campos"
 
-    if estado.intencion == "image_request":
+    if estado.intencion == "solicitud_imagen":
         respuesta = renderizar_respuesta_solicitud_imagen(estado)
         return respuesta, estado, "imagen"
 
-    if estado.intencion == "close":
+    if estado.intencion == "cierre":
         respuesta = renderizar_respuesta_cierre(estado)
         return respuesta, estado, "cierre"
 
-    if estado.intencion == "memory_check":
+    if estado.intencion == "consulta_memoria":
         respuesta = renderizar_respuesta_consulta_memoria(estado)
         return respuesta, estado, "memoria"
 
-    if estado.intencion == "resume_previous":
+    if estado.intencion == "retomar_previa":
         respuesta, estado = manejar_retomar_previa(estado)
         return respuesta, estado, "memoria_previa"
 
-    if estado.intencion == "greeting":
+    if estado.intencion == "saludo":
         respuesta = renderizar_respuesta_saludo(estado)
         return respuesta, estado, "saludo"
 
-    if estado.intencion == "review_order":
+    if estado.intencion == "revisar_pedido":
         respuesta = renderizar_respuesta_revision_pedido(estado)
         return respuesta, estado, "revision_pedido"
 
-    if estado.intencion == "general_question":
+    if estado.intencion == "consulta_general":
         respuesta = renderizar_respuesta_rag(mensaje_usuario)
         return respuesta, estado, "politica"
 
-    if estado.intencion == "price_query":
+    if estado.intencion == "consulta_precio":
         respuesta = renderizar_respuesta_consulta_precio(mensaje_usuario, estado)
         return respuesta, estado, "consulta_precio"
 
-    if estado.intencion == "human_handoff":
+    if estado.intencion == "derivacion_humana":
         estado.derivacion_confirmada = True
         handoff = mock_derivar_whatsapp(estado, reason="Solicitud explicita del usuario.")
         estado.resumen_derivacion = handoff
         respuesta = renderizar_respuesta_derivacion(handoff)
         return respuesta, estado, "derivacion"
 
-    if estado.intencion in {"discount_request", "payment_request"}:
+    if estado.intencion in {"solicitud_descuento", "solicitud_pago"}:
         estado.derivacion_ofrecida = True
         respuesta = pedir_confirmacion_derivacion(estado)
         return respuesta, estado, "derivacion_ofrecida"
 
-    if estado.intencion == "modify_request":
+    if estado.intencion == "modificar_pedido":
         respuesta = renderizar_respuesta_revision_pedido(estado)
         if not estado.cambio_producto_limpio_no_soportados:
             return respuesta, estado, "pedido_modificado"
 
-    if estado.intencion == "handoff_confirmation" and estado.derivacion_ofrecida:
+    if estado.intencion == "confirmacion_derivacion" and estado.derivacion_ofrecida:
         estado.derivacion_confirmada = True
         handoff = mock_derivar_whatsapp(estado, reason="Usuario acepta derivacion por WhatsApp.")
         estado.resumen_derivacion = handoff
@@ -229,9 +229,9 @@ def fusionar_extraccion_en_estado(estado: EstadoCotizacion, extraction: dict) ->
     estado.errores_validacion_campos = []
     fields = extraction.get("fields", {})
     estado.errores_validacion_campos = list(fields.get("errores_validacion_campos", []))
-    if estado.intencion == "new_quote":
+    if estado.intencion == "nueva_cotizacion":
         limpiar_estado_para_nueva_cotizacion(estado)
-        estado.intencion = "recommendation"
+        estado.intencion = "recomendacion"
     if fields.get("product_changes"):
         aplicar_cambios_productos(estado, fields["product_changes"])
 
@@ -266,7 +266,7 @@ def fusionar_extraccion_en_estado(estado: EstadoCotizacion, extraction: dict) ->
         if product not in estado.productos_solicitados_no_soportados:
             estado.productos_solicitados_no_soportados.append(product)
 
-    if estado.intencion == "modify_request":
+    if estado.intencion == "modificar_pedido":
         estado.cotizacion = None
         estado.opcion_recomendada = None
         estado.opciones_catalogo = []
@@ -290,8 +290,8 @@ def asegurar_productos_mencionados_si_eran_faltantes(
     for producto in productos_mencionados:
         if producto not in estado.productos_solicitados:
             estado.productos_solicitados.append(producto)
-    if estado.intencion in {"review_order", "modify_request"}:
-        estado.intencion = "recommendation"
+    if estado.intencion in {"revisar_pedido", "modificar_pedido"}:
+        estado.intencion = "recomendacion"
     estado.registrar_log(
         "guardrail_productos_mencionados",
         {"productos_agregados": productos_mencionados, "motivo": "respuesta_a_productos_faltantes"},
@@ -339,7 +339,7 @@ def limpiar_estado_para_nueva_cotizacion(estado: EstadoCotizacion) -> None:
 # MEMORIA PERSISTENTE: busca una cotizacion previa usando el contacto como identificador principal.
 def detectar_conversacion_previa_por_contacto(estado: EstadoCotizacion) -> str | None:
     """Busca automaticamente memoria previa cuando aparece un contacto."""
-    if not estado.contacto or estado.estado_previo_pendiente or estado.intencion == "resume_previous":
+    if not estado.contacto or estado.estado_previo_pendiente or estado.intencion == "retomar_previa":
         return None
     # MEMORIA PERSISTENTE: consulta por telefono/correo para saber si existe una cotizacion previa.
     previo = QUOTE_MEMORY.buscar_por_contacto(estado.contacto)
@@ -348,7 +348,7 @@ def detectar_conversacion_previa_por_contacto(estado: EstadoCotizacion) -> str |
     if not tiene_memoria_cotizacion_util(previo):
         return None
     estado.estado_previo_pendiente = previo.a_diccionario_persistido()
-    estado.intencion = "previous_found"
+    estado.intencion = "previa_encontrada"
     estado.registrar_log(
         "previous_conversation_found_by_contact",
         {"contacto": estado.contacto, "previous_session_id": previo.id_sesion},
@@ -380,7 +380,7 @@ def manejar_eleccion_previa_pendiente(mensaje_usuario: str, estado: EstadoCotiza
         retomado.estado_previo_pendiente = None
         invalidar_cotizacion_recuperada_para_revalidar(retomado)
         retomado.campos_faltantes = encontrar_campos_faltantes(retomado)
-        retomado.registrar_log("resume_previous_after_contact_match", {"contacto": retomado.contacto})
+        retomado.registrar_log("retomar_previa_despues_coincidencia_contacto", {"contacto": retomado.contacto})
         return renderizar_respuesta_previa_retomada(retomado), retomado
     if wants_current:
         estado.estado_previo_pendiente = None
@@ -452,7 +452,7 @@ def aplicar_cambios_productos(estado: EstadoCotizacion, changes: dict[str, list[
 # VALIDACION DE PRODUCTOS: decide si los productos nuevos deben sumarse al pedido actual.
 def debe_fusionar_productos_solicitados(intencion: str | None, changes: dict) -> bool:
     """Evita reinsertar productos cuando el usuario esta quitando o reemplazando."""
-    if intencion != "modify_request":
+    if intencion != "modificar_pedido":
         return True
     return bool(changes.get("add")) and not any(changes.get(key) for key in ["remove", "replace_from", "replace_to"])
 
@@ -461,24 +461,24 @@ def debe_fusionar_productos_solicitados(intencion: str | None, changes: dict) ->
 def aplicar_accion_agente_a_intencion(accion: str, estado: EstadoCotizacion, mensaje_usuario: str) -> None:
     """Convierte la decision del agente en una intencion ejecutable."""
     mapping = {
-        "answer_price": "price_query",
-        "generate_quote": "cotizacion",
-        "show_image": "image_request",
-        "answer_policy": "general_question",
-        "close": "close",
-        "resume_previous": "resume_previous",
-        "new_quote": "recommendation",
+        "responder_precio": "consulta_precio",
+        "generar_cotizacion": "cotizacion",
+        "mostrar_imagen": "solicitud_imagen",
+        "responder_politica": "consulta_general",
+        "cierre": "cierre",
+        "retomar_previa": "retomar_previa",
+        "nueva_cotizacion": "recomendacion",
     }
-    if accion == "handoff":
+    if accion == "derivacion":
         if es_solicitud_derivacion_explicita(mensaje_usuario):
-            estado.intencion = "human_handoff"
+            estado.intencion = "derivacion_humana"
         return
     if accion in mapping:
         estado.intencion = mapping[accion]
     elif accion == "pedir_campos_faltantes":
-        estado.intencion = "recommendation"
-    elif accion == "validate_and_recommend":
-        estado.intencion = "recommendation"
+        estado.intencion = "recomendacion"
+    elif accion == "validar_y_recomendar":
+        estado.intencion = "recomendacion"
 
 
 # VALIDACION DE MINIMOS: calcula que datos faltan antes de consultar tools de negocio.
@@ -643,9 +643,9 @@ def fecha_evento_es_valida(value: str) -> bool:
 # DERIVACION HUMANA: ofrece WhatsApp solo como opcion, sin derivar hasta que el usuario lo pida.
 def pedir_confirmacion_derivacion(estado: EstadoCotizacion) -> str:
     """Ofrece derivacion humana para casos que el flujo no puede resolver."""
-    if estado.intencion == "discount_request":
+    if estado.intencion == "solicitud_descuento":
         reason = "No puedo aprobar descuentos desde el flujo automatico."
-    elif estado.intencion == "payment_request":
+    elif estado.intencion == "solicitud_pago":
         reason = "No puedo confirmar pagos ni reservas desde el flujo automatico."
     else:
         reason = "Esta solicitud requiere revision humana."
@@ -975,8 +975,8 @@ def manejar_retomar_previa(estado: EstadoCotizacion) -> tuple[str, EstadoCotizac
     retomado = QUOTE_MEMORY.hidratar(estado, previo)
     invalidar_cotizacion_recuperada_para_revalidar(retomado)
     retomado.registrar_log(
-        "resume_previous_conversation",
-        {"nombre_cliente": retomado.nombre_cliente, "contacto": retomado.contacto, "resumed_session_id": previo.id_sesion},
+        "retomar_conversacion_previa",
+        {"nombre_cliente": retomado.nombre_cliente, "contacto": retomado.contacto, "id_sesion_retomada": previo.id_sesion},
     )
     # MEMORIA PERSISTENTE: despues de recuperar por identidad, esta cotizacion se hidrata en el session_id actual.
     retomado.campos_faltantes = encontrar_campos_faltantes(retomado)
@@ -1165,7 +1165,7 @@ def renderizar_memoria_temporal(estado: EstadoCotizacion) -> str:
         captured.append(f"preferencias: {', '.join(estado.preferencias)}")
 
     captured_text = "; ".join(captured) if captured else "sin datos capturados todavia"
-    if estado.intencion == "resume_previous" and not estado.contacto:
+    if estado.intencion == "retomar_previa" and not estado.contacto:
         return f"_Tengo en memoria: {captured_text}. Siguiente por confirmar: telefono o correo para buscar la cotizacion anterior._"
     missing = encontrar_campos_faltantes(estado)
     if missing:

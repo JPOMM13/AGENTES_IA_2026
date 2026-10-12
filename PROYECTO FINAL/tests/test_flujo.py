@@ -127,7 +127,7 @@ def test_generar_cotizacion_no_acepta_override_nueva_cotizacion(monkeypatch):
     monkeypatch.setattr(
         extraction_tools,
         "_extraer_campos_con_agente",
-        lambda mensaje_usuario, estado: {"intent_override": "new_quote"},
+        lambda mensaje_usuario, estado: {"intent_override": "nueva_cotizacion"},
     )
 
     respuesta, estado = manejar_mensaje("genera la cotizacion", estado)
@@ -154,8 +154,8 @@ def test_variantes_naturales_generan_cotizacion_por_contexto():
         assert "cotizacion" in respuesta.lower()
 
 
-# Prueba que el override estructurado generate_quote del extractor se acepte con guardrails.
-def test_override_agentico_generate_quote_genera_con_validacion(monkeypatch):
+# Prueba que el override estructurado generar_cotizacion del extractor se acepte con guardrails.
+def test_override_agentico_generar_cotizacion_genera_con_validacion(monkeypatch):
     estado = EstadoCotizacion()
     _, estado = manejar_mensaje(
         "Soy Juan Perez, mi telefono es 999888777. Necesito cerveza y agua para un matrimonio de 30 personas el 5 de febrero de 2027 en Miraflores",
@@ -165,7 +165,7 @@ def test_override_agentico_generate_quote_genera_con_validacion(monkeypatch):
     monkeypatch.setattr(
         extraction_tools,
         "_extraer_campos_con_agente",
-        lambda mensaje_usuario, estado: {"intent_override": "generate_quote"},
+        lambda mensaje_usuario, estado: {"intent_override": "generar_cotizacion"},
     )
 
     respuesta, estado = manejar_mensaje("procede", estado)
@@ -417,7 +417,7 @@ def test_asistentes_en_seguimiento_no_activa_derivacion():
     respuesta, estado = manejar_mensaje("es para 20 personas", estado)
 
     assert estado.asistentes == 20
-    assert estado.intencion != "human_handoff"
+    assert estado.intencion != "derivacion_humana"
     assert estado.etapa == "recoleccion"
     assert estado.derivacion_confirmada is False
     assert "WhatsApp" not in respuesta
@@ -470,7 +470,7 @@ def test_productos_directos_se_guardan_aunque_agente_proponga_revision(monkeypat
     monkeypatch.setattr(
         extraction_tools,
         "_extraer_campos_con_agente",
-        lambda mensaje, estado: {"intent_override": "review_order"},
+        lambda mensaje, estado: {"intent_override": "revisar_pedido"},
     )
 
     respuesta, estado = manejar_mensaje("vino y hielo.", estado)
@@ -671,7 +671,7 @@ def test_pide_telefono_para_buscar_datos_de_otra_sesion():
 
     respuesta, estado = manejar_mensaje("pero ya te di mis datos en otra session", estado)
 
-    assert estado.intencion == "resume_previous"
+    assert estado.intencion == "retomar_previa"
     assert estado.campos_faltantes == ["contacto"]
     assert "telefono o correo" in respuesta
     assert "tipo de evento" not in respuesta
@@ -684,7 +684,7 @@ def test_quiere_seguir_con_conversacion_anterior_pide_contacto():
 
     respuesta, estado = manejar_mensaje("Hola quiero seguir con la conversacion que tuvimos", estado)
 
-    assert estado.intencion == "resume_previous"
+    assert estado.intencion == "retomar_previa"
     assert estado.campos_faltantes == ["contacto"]
     assert "telefono o correo" in respuesta
     assert "tipo de evento" not in respuesta
@@ -696,13 +696,13 @@ def test_retomar_conversacion_no_se_convierte_en_revision_pedido(monkeypatch):
     monkeypatch.setattr(
         extraction_tools,
         "_extraer_campos_con_agente",
-        lambda message, estado: {"intent_override": "review_order"},
+        lambda message, estado: {"intent_override": "revisar_pedido"},
     )
     estado = EstadoCotizacion()
 
     respuesta, estado = manejar_mensaje("Hola quiero seguir con la conversacion que tuvimos", estado)
 
-    assert estado.intencion == "resume_previous"
+    assert estado.intencion == "retomar_previa"
     assert estado.etapa == "memoria_previa"
     assert "telefono o correo" in respuesta
     assert "producto o servicio" not in respuesta
@@ -714,7 +714,7 @@ def test_datos_anteriores_y_seguir_conversacion_pide_contacto():
 
     respuesta, estado = manejar_mensaje("Hola ya te deje datos anteriormente quiero seguir con mi conversacion", estado)
 
-    assert estado.intencion == "resume_previous"
+    assert estado.intencion == "retomar_previa"
     assert estado.etapa == "memoria_previa"
     assert estado.campos_faltantes == ["contacto"]
     assert "telefono o correo" in respuesta
@@ -728,7 +728,7 @@ def test_ya_tuve_session_contigo_pide_contacto():
 
     respuesta, estado = manejar_mensaje("esta bien, yo ya tuve una session contigo y quiero continuarla", estado)
 
-    assert estado.intencion == "resume_previous"
+    assert estado.intencion == "retomar_previa"
     assert estado.etapa == "memoria_previa"
     assert estado.campos_faltantes == ["contacto"]
     assert "telefono o correo" in respuesta
@@ -742,7 +742,7 @@ def test_ya_tuvimos_session_y_di_todos_mis_datos_pide_contacto():
 
     respuesta, estado = manejar_mensaje("ya tuvimos una session te di todos mis datos", estado)
 
-    assert estado.intencion == "resume_previous"
+    assert estado.intencion == "retomar_previa"
     assert estado.etapa == "memoria_previa"
     assert estado.campos_faltantes == ["contacto"]
     assert "telefono o correo" in respuesta
@@ -756,7 +756,7 @@ def test_hola_datos_enteriormente_pide_contacto_para_memoria():
 
     respuesta, estado = manejar_mensaje("Hola ya te dire mis datos enteriormente", estado)
 
-    assert estado.intencion == "resume_previous"
+    assert estado.intencion == "retomar_previa"
     assert estado.etapa == "memoria_previa"
     assert estado.campos_faltantes == ["contacto"]
     assert "telefono o correo" in respuesta
@@ -770,7 +770,7 @@ def test_ya_te_di_esos_datos_pide_contacto_para_memoria():
 
     respuesta, estado = manejar_mensaje("te estoy diciendo que ya te di esos datos", estado)
 
-    assert estado.intencion == "resume_previous"
+    assert estado.intencion == "retomar_previa"
     assert estado.etapa == "memoria_previa"
     assert estado.campos_faltantes == ["contacto"]
     assert "telefono o correo" in respuesta
@@ -789,7 +789,7 @@ def test_guardrail_decision_preserva_recuperacion_memoria(monkeypatch):
 
     respuesta, estado = manejar_mensaje("esta bien, yo ya tuve una session contigo y quiero continuarla", estado)
 
-    assert estado.intencion == "resume_previous"
+    assert estado.intencion == "retomar_previa"
     assert estado.etapa == "memoria_previa"
     assert estado.campos_faltantes == ["contacto"]
     assert "telefono o correo" in respuesta
@@ -808,7 +808,7 @@ def test_fallback_si_llm_decisor_falla_en_recuperacion_memoria(monkeypatch):
 
     respuesta, estado = manejar_mensaje("ya tuvimos una session te di todos mis datos", estado)
 
-    assert estado.intencion == "resume_previous"
+    assert estado.intencion == "retomar_previa"
     assert estado.etapa == "memoria_previa"
     assert estado.campos_faltantes == ["contacto"]
     assert "telefono o correo" in respuesta
@@ -820,13 +820,13 @@ def test_guardrail_decision_preserva_saludo_simple(monkeypatch):
     monkeypatch.setattr(
         workflow,
         "decidir_siguiente_accion_con_agente",
-        lambda mensaje_usuario, estado: "answer_price",
+        lambda mensaje_usuario, estado: "responder_precio",
     )
     estado = EstadoCotizacion()
 
     respuesta, estado = manejar_mensaje("Hola que tal como estas?", estado)
 
-    assert estado.intencion == "greeting"
+    assert estado.intencion == "saludo"
     assert estado.etapa == "saludo"
     assert "tipo de evento" in respuesta
     assert "precio informativo" not in respuesta
@@ -866,12 +866,12 @@ def test_contacto_despues_de_retomar_busca_memoria_y_si_no_existe_inicia_nueva(m
     estado = EstadoCotizacion()
 
     respuesta, estado = manejar_mensaje("tuve una sesion anterior donde te di ya mis datos", estado)
-    assert estado.intencion == "resume_previous"
+    assert estado.intencion == "retomar_previa"
     assert "telefono o correo" in respuesta
 
     respuesta, estado = manejar_mensaje("989515182", estado)
 
-    assert estado.intencion == "resume_previous"
+    assert estado.intencion == "retomar_previa"
     assert estado.contacto == "989515182"
     assert "No encontre una cotizacion anterior" in respuesta
     assert "Empecemos una nueva cotizacion" in respuesta

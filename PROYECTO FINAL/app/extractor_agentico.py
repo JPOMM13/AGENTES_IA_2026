@@ -129,15 +129,15 @@ REGLAS IMPORTANTES:
 - preferences_csv puede incluir economico, premium, formal, sencillo, separadas
   por coma. No pongas productos aqui.
 - Si el usuario quiere generar, emitir, proceder, cerrar con la propuesta o
-  pedir una proforma/cotizacion formal, usa intent_override=generate_quote.
+  pedir una proforma/cotizacion formal, usa intent_override=generar_cotizacion.
 - Si el usuario quiere revisar, cambiar, agregar o quitar productos, usa
-  intent_override=review_order o intent_override=modify_request.
+  intent_override=revisar_pedido o intent_override=modificar_pedido.
 - Si el usuario dice que quiere otra/nueva cotizacion, otro numero, otro
-  contacto u otra persona, usa intent_override=new_quote.
+  contacto u otra persona, usa intent_override=nueva_cotizacion.
 - Si el usuario dice que ya tuvo una sesion/conversacion anterior, que ya
   conversaron, que ya dio/dejo todos sus datos, que ya dio datos antes aunque
   escriba con errores como "enteriormente", o que quiere continuar lo anterior,
-  usa intent_override=resume_previous. No extraigas datos de evento desde esa
+  usa intent_override=retomar_previa. No extraigas datos de evento desde esa
   frase; primero se debe buscar memoria por telefono o correo.
 - Para modificar productos usa remove_products_csv, add_products_csv,
   replace_from_csv y replace_to_csv.
@@ -219,7 +219,14 @@ def normalizar_campos_extraidos(carga: dict[str, Any], mensaje_usuario: str) -> 
         fields["productos_solicitados"] = productos_solicitados
 
     intent_override = limpiar_texto(carga.get("intent_override")).lower()
-    if intent_override in {"modify_request", "review_order", "resume_previous", "new_quote", "generate_quote"}:
+    overrides_permitidos = {
+        "modificar_pedido",
+        "revisar_pedido",
+        "retomar_previa",
+        "nueva_cotizacion",
+        "generar_cotizacion",
+    }
+    if intent_override in overrides_permitidos:
         fields["intent_override"] = intent_override
 
     product_changes = normalizar_cambios_productos(carga, mensaje_usuario)
