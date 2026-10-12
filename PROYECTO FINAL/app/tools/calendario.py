@@ -10,10 +10,10 @@ from app.fuente_datos import usar_postgres_negocio
 from app.repositorios_postgres.calendario_postgres import agregar_reserva_postgres, buscar_reservas_cruzadas, obtener_max_eventos_por_distrito_dia
 
 
-# TOOL MOCK/CALENDARIO: valida que la fecha y distrito no crucen con eventos ya reservados.
+# TOOL CALENDARIO: valida que la fecha y distrito no crucen con eventos ya reservados.
 def mock_validar_calendario_eventos(estado: EstadoCotizacion) -> dict:
-    """Consulta la agenda mock para evitar cruces por fecha y distrito."""
-    # MOCK: AQUI SE CONSULTARIA UNA TABLA TRANSACCIONAL DE RESERVAS/CALENDARIO EN POSTGRESQL CON BLOQUEOS REALES.
+    """Consulta la agenda para evitar cruces por fecha y distrito."""
+    # CALENDARIO: consulta reservas/bloqueos por fecha y distrito.
     if not estado.fecha_evento or not estado.distrito:
         return {"ok": False, "reason": "Falta fecha o distrito para validar calendario.", "reservas_cruzadas": []}
 
@@ -37,16 +37,16 @@ def mock_validar_calendario_eventos(estado: EstadoCotizacion) -> dict:
         "distrito": estado.distrito,
         "capacidad_dia_distrito": capacidad,
         "reservas_cruzadas": reservas_cruzadas,
-        "reason": None if ok else "Ya existe una reserva mock para esa fecha y distrito.",
+        "reason": None if ok else "Ya existe una reserva para esa fecha y distrito.",
     }
 
 
-# TOOL MOCK/CALENDARIO: registra la cotizacion emitida como evento reservado para futuras validaciones.
+# TOOL CALENDARIO: registra la cotizacion emitida como evento reservado para futuras validaciones.
 def mock_registrar_evento_cotizado(estado: EstadoCotizacion) -> dict:
-    """Guarda la reserva mock cuando se genera una cotizacion."""
-    # MOCK: EN PRODUCCION ESTO DEBERIA INSERTAR/ACTUALIZAR UNA RESERVA EN POSTGRESQL DENTRO DE UNA TRANSACCION.
+    """Guarda la reserva cuando se genera una cotizacion."""
+    # CALENDARIO: inserta/actualiza una reserva dentro de una transaccion.
     reserva = {
-        "id_reserva": f"R-POC-{uuid4().hex[:8].upper()}",
+        "id_reserva": f"RES-{uuid4().hex[:8].upper()}",
         "id_sesion": estado.id_sesion,
         "quote_id": (estado.cotizacion or {}).get("quote_id"),
         "nombre_cliente": estado.nombre_cliente,

@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import os
+import stat
 from contextlib import contextmanager
+from pathlib import Path
 from typing import Iterator
 
 from app.configuracion_llm import cargar_archivo_env
@@ -38,8 +40,21 @@ def obtener_parametros_postgres() -> dict:
     }.items():
         value = os.getenv(env_name)
         if value:
+            if env_name == "POSTGRES_SSLKEY":
+                asegurar_permiso_llave_privada(value)
             parametros[param_name] = value
     return parametros
+
+
+# CONFIGURACION POSTGRES/SSL: libpq rechaza llaves privadas con permisos de grupo u otros.
+def asegurar_permiso_llave_privada(ruta_llave: str) -> None:
+    """Asegura permisos 0600 para la llave privada SSL si existe localmente."""
+    path = Path(ruta_llave)
+    if not path.exists():
+        return
+    mode = path.stat().st_mode
+    if mode & (stat.S_IRWXG | stat.S_IRWXO):
+        path.chmod(0o600)
 
 
 def obtener_dsn_postgres() -> str:

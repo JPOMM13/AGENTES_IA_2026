@@ -15,7 +15,7 @@ def renderizar_panel_estado(estado: EstadoCotizacion) -> None:
     st.sidebar.json(estado.a_diccionario_panel())
 
     if estado.dimensionamiento:
-        st.sidebar.subheader("Dimensionamiento mock")
+        st.sidebar.subheader("Dimensionamiento")
         st.sidebar.json(estado.dimensionamiento)
 
     if estado.resumen_derivacion:
@@ -94,7 +94,7 @@ def renderizar_tarjeta_cotizacion(estado: EstadoCotizacion) -> None:
     if not estado.cotizacion:
         return
     cotizacion = estado.cotizacion
-    st.subheader("Cotizacion mock")
+    st.subheader("Cotizacion")
     st.metric("Total", f"{cotizacion['currency']} {cotizacion['total']:.2f}")
     st.write(f"Subtotal: {cotizacion['currency']} {cotizacion['subtotal']:.2f}")
     st.write(f"IGV: {cotizacion['currency']} {cotizacion['taxes']:.2f}")

@@ -9,10 +9,10 @@ from app.repositorios_postgres.rag_postgres import buscar_rag_postgres
 RAG_CHAT_MODEL = "gpt-4o-mini"
 
 
-# TOOL MOCK/RAG: busca politicas o contexto de negocio en una base de conocimiento simulada.
+# TOOL RAG: busca politicas o contexto de negocio en una base de conocimiento local.
 def mock_buscar_rag(query: str) -> dict:
-    """Busca respuestas de politicas en la base de conocimiento mock."""
-    # MOCK: ESTA TOOL DEBERIA CONSULTAR EL RAG REAL CON DOCUMENTOS EN STORAGE, EMBEDDINGS EN PGVECTOR/POSTGRESQL Y RETRIEVER SEMANTICO.
+    """Busca respuestas de politicas en la base de conocimiento local."""
+    # RAG: consulta documentos, embeddings y retriever semantico.
     if usar_postgres_negocio():
         return buscar_rag_postgres(query)
 

@@ -1,1 +1,1 @@
-"""Tools mockeadas usadas por el workflow."""
+"""Tools usadas por el workflow."""

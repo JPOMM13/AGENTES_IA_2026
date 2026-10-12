@@ -170,7 +170,8 @@ def cargar_archivo_env(path: Path = ENV_PATH) -> None:
         key, value = line.split("=", 1)
         key = key.strip()
         value = value.strip().strip('"').strip("'")
-        if key:
+        no_sobrescribir = os.getenv("COTIZADOR_NO_SOBRESCRIBIR_ENV", "").lower() in {"1", "true", "yes"}
+        if key and (not no_sobrescribir or key not in os.environ):
             os.environ[key] = value
     _ENV_LOADED = True
     _ENV_MTIME = current_mtime

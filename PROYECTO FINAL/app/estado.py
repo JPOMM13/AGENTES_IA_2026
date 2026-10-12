@@ -1,8 +1,19 @@
 from __future__ import annotations
 
+import logging
 from dataclasses import asdict, dataclass, field, fields
 from typing import Any
 from uuid import uuid4
+
+
+logger_flujo = logging.getLogger("cotizador.flujo")
+logger_flujo.setLevel(logging.INFO)
+logger_flujo.propagate = False
+if not logger_flujo.handlers:
+    manejador_consola = logging.StreamHandler()
+    manejador_consola.setLevel(logging.INFO)
+    manejador_consola.setFormatter(logging.Formatter("INFO:%(name)s:%(message)s"))
+    logger_flujo.addHandler(manejador_consola)
 
 
 @dataclass
@@ -53,7 +64,9 @@ class EstadoCotizacion:
     # OBSERVABILIDAD DEL ESTADO: agrega trazas del flujo para depurar decisiones, tools y guardrails.
     def registrar_log(self, evento: str, carga: dict[str, Any] | None = None) -> None:
         """Registra una traza interna del flujo para debugging y evals."""
-        self.trazas.append({"evento": evento, "carga": carga or {}})
+        carga_log = carga or {}
+        self.trazas.append({"evento": evento, "carga": carga_log})
+        logger_flujo.info("evento=%s carga=%s", evento, carga_log)
 
     # UI/DEBUG: serializa el estado para mostrarlo en el panel lateral de Streamlit.
     def a_diccionario_panel(self) -> dict[str, Any]:
@@ -86,15 +99,15 @@ class EstadoCotizacion:
             "imagen_artefacto_cotizacion": self.imagen_artefacto_cotizacion,
         }
 
-    # MEMORIA MOCK: serializa el estado para guardarlo en JSON local o persistencia futura.
+    # MEMORIA PERSISTENTE: serializa el estado para guardarlo entre sesiones.
     def a_diccionario_persistido(self) -> dict[str, Any]:
-        """Serializa el estado para guardarlo en la memoria mock entre sesiones."""
+        """Serializa el estado para guardarlo entre sesiones."""
         data = asdict(self)
         data["mensajes"] = data["mensajes"][-20:]
         data["trazas"] = data["trazas"][-50:]
         return data
 
-    # MEMORIA MOCK: reconstruye el estado desde JSON persistido manteniendo compatibilidad.
+    # MEMORIA PERSISTENTE: reconstruye el estado desde JSON persistido manteniendo compatibilidad.
     @classmethod
     def desde_diccionario_persistido(cls, data: dict[str, Any]) -> "EstadoCotizacion":
         """Reconstruye un EstadoCotizacion desde datos guardados previamente."""

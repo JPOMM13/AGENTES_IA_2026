@@ -110,8 +110,68 @@ def test_cotizacion_despues_recomendacion():
     assert estado.cotizacion is None
 
     respuesta, estado = manejar_mensaje("genera la cotizacion", estado)
-    assert "Cotizacion mock" in respuesta
+    assert "cotizacion" in respuesta.lower()
     assert estado.cotizacion["total"] == 3304.0
+
+
+# Prueba que una mala clasificacion del extractor LLM no limpie el estado al generar cotizacion.
+def test_generar_cotizacion_no_acepta_override_nueva_cotizacion(monkeypatch):
+    estado = EstadoCotizacion()
+    _, estado = manejar_mensaje(
+        "Soy Juan Perez, mi telefono es 999888777. Necesito cerveza y agua para un matrimonio de 30 personas el 5 de febrero de 2027 en Miraflores",
+        estado,
+    )
+    assert estado.productos_solicitados == ["cerveza", "agua"]
+    assert estado.opcion_recomendada is not None
+
+    monkeypatch.setattr(
+        extraction_tools,
+        "_extraer_campos_con_agente",
+        lambda mensaje_usuario, estado: {"intent_override": "nueva_cotizacion"},
+    )
+
+    respuesta, estado = manejar_mensaje("genera la cotizacion", estado)
+
+    assert estado.tipo_evento == "matrimonio"
+    assert estado.asistentes == 30
+    assert estado.productos_solicitados == ["cerveza", "agua"]
+    assert estado.cotizacion is not None
+    assert "cotizacion" in respuesta.lower()
+
+
+# Prueba que variantes naturales de confirmacion generen cotizacion por contexto.
+def test_variantes_naturales_generan_cotizacion_por_contexto():
+    for indice, mensaje_confirmacion in enumerate(["emítela", "dale procede", "haz la proforma", "cerramos con eso"], start=1):
+        estado = EstadoCotizacion()
+        _, estado = manejar_mensaje(
+            f"Soy Juan Perez, mi telefono es 99988877{indice}. Necesito cerveza y agua para un matrimonio de 30 personas el {indice + 5} de febrero de 2027 en Miraflores",
+            estado,
+        )
+
+        respuesta, estado = manejar_mensaje(mensaje_confirmacion, estado)
+
+        assert estado.cotizacion is not None
+        assert "cotizacion" in respuesta.lower()
+
+
+# Prueba que el override estructurado generar_cotizacion del extractor se acepte con guardrails.
+def test_override_agentico_generar_cotizacion_genera_con_validacion(monkeypatch):
+    estado = EstadoCotizacion()
+    _, estado = manejar_mensaje(
+        "Soy Juan Perez, mi telefono es 999888777. Necesito cerveza y agua para un matrimonio de 30 personas el 5 de febrero de 2027 en Miraflores",
+        estado,
+    )
+
+    monkeypatch.setattr(
+        extraction_tools,
+        "_extraer_campos_con_agente",
+        lambda mensaje_usuario, estado: {"intent_override": "generar_cotizacion"},
+    )
+
+    respuesta, estado = manejar_mensaje("procede", estado)
+
+    assert estado.cotizacion is not None
+    assert "cotizacion" in respuesta.lower()
 
 
 # Prueba el comportamiento de test cotizacion genera artefacto visual.
@@ -126,7 +186,7 @@ def test_cotizacion_genera_artefacto_visual(monkeypatch, tmp_path):
 
     assert estado.imagen_artefacto_cotizacion
     assert (tmp_path / "generated").exists()
-    assert "Q-POC-0001" in estado.imagen_artefacto_cotizacion
+    assert "COT-0001" in estado.imagen_artefacto_cotizacion
 
 
 # Prueba el comportamiento de test descuento no cambia precio y ofrece derivacion.
@@ -239,7 +299,7 @@ def test_producto_no_soportado_sugiere_similar_antes_cotizar():
         "Soy John Manchego, mi telefono es 989515182. Necesito whisky economico para un matrimonio de 34 personas el 25 de octubre en Miraflores",
         estado,
     )
-    assert "no lo tengo en catalogo mock" in respuesta
+    assert "no lo tengo en catalogo" in respuesta
     assert "vino" in respuesta
     assert "cerveza" in respuesta
     assert estado.opcion_recomendada is None
@@ -260,7 +320,7 @@ def test_producto_inexistente_sugiere_alternativas_por_categoria():
     )
 
     assert "tequila" in respuesta
-    assert "no lo tengo en catalogo mock" in respuesta
+    assert "no lo tengo en catalogo" in respuesta
     assert "ron" in respuesta
     assert "vino" in respuesta
     assert "cerveza" in respuesta
@@ -357,7 +417,7 @@ def test_asistentes_en_seguimiento_no_activa_derivacion():
     respuesta, estado = manejar_mensaje("es para 20 personas", estado)
 
     assert estado.asistentes == 20
-    assert estado.intencion != "human_handoff"
+    assert estado.intencion != "derivacion_humana"
     assert estado.etapa == "recoleccion"
     assert estado.derivacion_confirmada is False
     assert "WhatsApp" not in respuesta
@@ -394,6 +454,29 @@ def test_productos_faltantes_lista_catalogo_para_elegir():
     assert "Gaseosa 1.5L" in respuesta
     assert "Pack celebracion esencial" in respuesta
     assert estado.opcion_recomendada is None
+
+
+# Prueba que una respuesta directa con productos no se pierda aunque el LLM clasifique revision.
+def test_productos_directos_se_guardan_aunque_agente_proponga_revision(monkeypatch):
+    estado = EstadoCotizacion(
+        tipo_evento="matrimonio",
+        asistentes=30,
+        fecha_evento="2027-02-05",
+        distrito="Miraflores",
+        nombre_cliente="John Manchego",
+        contacto="989515182",
+    )
+    estado.campos_faltantes = ["productos_solicitados"]
+    monkeypatch.setattr(
+        extraction_tools,
+        "_extraer_campos_con_agente",
+        lambda mensaje, estado: {"intent_override": "revisar_pedido"},
+    )
+
+    respuesta, estado = manejar_mensaje("vino y hielo.", estado)
+
+    assert estado.productos_solicitados == ["vino", "hielo"]
+    assert "sin productos/servicios elegidos todavia" not in respuesta
 
 
 # Prueba el comportamiento de test usuario puede revisar y modificar productos antes cotizar.
@@ -443,7 +526,7 @@ def test_calendario_mock_bloquea_cruce_despues_de_cotizar():
         primera,
     )
     respuesta, primera = manejar_mensaje("genera la cotizacion", primera)
-    assert "Cotizacion mock" in respuesta
+    assert "cotizacion" in respuesta.lower()
 
     segunda = EstadoCotizacion()
     respuesta, segunda = manejar_mensaje(
@@ -452,7 +535,7 @@ def test_calendario_mock_bloquea_cruce_despues_de_cotizar():
     )
 
     assert segunda.calendario_ok is False
-    assert "ya tiene una reserva mock registrada" in respuesta
+    assert "ya tiene una reserva registrada" in respuesta
     assert segunda.opcion_recomendada is None
 
 
@@ -532,7 +615,7 @@ def test_retomar_cotizacion_previa_obliga_revalidar_calendario(monkeypatch, tmp_
         previo,
     )
     respuesta, previo = manejar_mensaje("genera la cotizacion", previo)
-    assert "Cotizacion mock" in respuesta
+    assert "cotizacion" in respuesta.lower()
     assert previo.cotizacion is not None
 
     actual = EstadoCotizacion()
@@ -549,7 +632,7 @@ def test_retomar_cotizacion_previa_obliga_revalidar_calendario(monkeypatch, tmp_
     respuesta, actual = manejar_mensaje("genera la cotizacion", actual)
 
     assert actual.calendario_ok is False
-    assert "ya tiene una reserva mock registrada" in respuesta
+    assert "ya tiene una reserva registrada" in respuesta
     assert actual.cotizacion is None
 
 
@@ -588,7 +671,7 @@ def test_pide_telefono_para_buscar_datos_de_otra_sesion():
 
     respuesta, estado = manejar_mensaje("pero ya te di mis datos en otra session", estado)
 
-    assert estado.intencion == "resume_previous"
+    assert estado.intencion == "retomar_previa"
     assert estado.campos_faltantes == ["contacto"]
     assert "telefono o correo" in respuesta
     assert "tipo de evento" not in respuesta
@@ -601,7 +684,7 @@ def test_quiere_seguir_con_conversacion_anterior_pide_contacto():
 
     respuesta, estado = manejar_mensaje("Hola quiero seguir con la conversacion que tuvimos", estado)
 
-    assert estado.intencion == "resume_previous"
+    assert estado.intencion == "retomar_previa"
     assert estado.campos_faltantes == ["contacto"]
     assert "telefono o correo" in respuesta
     assert "tipo de evento" not in respuesta
@@ -613,13 +696,13 @@ def test_retomar_conversacion_no_se_convierte_en_revision_pedido(monkeypatch):
     monkeypatch.setattr(
         extraction_tools,
         "_extraer_campos_con_agente",
-        lambda message, estado: {"intent_override": "review_order"},
+        lambda message, estado: {"intent_override": "revisar_pedido"},
     )
     estado = EstadoCotizacion()
 
     respuesta, estado = manejar_mensaje("Hola quiero seguir con la conversacion que tuvimos", estado)
 
-    assert estado.intencion == "resume_previous"
+    assert estado.intencion == "retomar_previa"
     assert estado.etapa == "memoria_previa"
     assert "telefono o correo" in respuesta
     assert "producto o servicio" not in respuesta
@@ -631,7 +714,7 @@ def test_datos_anteriores_y_seguir_conversacion_pide_contacto():
 
     respuesta, estado = manejar_mensaje("Hola ya te deje datos anteriormente quiero seguir con mi conversacion", estado)
 
-    assert estado.intencion == "resume_previous"
+    assert estado.intencion == "retomar_previa"
     assert estado.etapa == "memoria_previa"
     assert estado.campos_faltantes == ["contacto"]
     assert "telefono o correo" in respuesta
@@ -645,7 +728,7 @@ def test_ya_tuve_session_contigo_pide_contacto():
 
     respuesta, estado = manejar_mensaje("esta bien, yo ya tuve una session contigo y quiero continuarla", estado)
 
-    assert estado.intencion == "resume_previous"
+    assert estado.intencion == "retomar_previa"
     assert estado.etapa == "memoria_previa"
     assert estado.campos_faltantes == ["contacto"]
     assert "telefono o correo" in respuesta
@@ -659,7 +742,7 @@ def test_ya_tuvimos_session_y_di_todos_mis_datos_pide_contacto():
 
     respuesta, estado = manejar_mensaje("ya tuvimos una session te di todos mis datos", estado)
 
-    assert estado.intencion == "resume_previous"
+    assert estado.intencion == "retomar_previa"
     assert estado.etapa == "memoria_previa"
     assert estado.campos_faltantes == ["contacto"]
     assert "telefono o correo" in respuesta
@@ -673,7 +756,7 @@ def test_hola_datos_enteriormente_pide_contacto_para_memoria():
 
     respuesta, estado = manejar_mensaje("Hola ya te dire mis datos enteriormente", estado)
 
-    assert estado.intencion == "resume_previous"
+    assert estado.intencion == "retomar_previa"
     assert estado.etapa == "memoria_previa"
     assert estado.campos_faltantes == ["contacto"]
     assert "telefono o correo" in respuesta
@@ -687,7 +770,7 @@ def test_ya_te_di_esos_datos_pide_contacto_para_memoria():
 
     respuesta, estado = manejar_mensaje("te estoy diciendo que ya te di esos datos", estado)
 
-    assert estado.intencion == "resume_previous"
+    assert estado.intencion == "retomar_previa"
     assert estado.etapa == "memoria_previa"
     assert estado.campos_faltantes == ["contacto"]
     assert "telefono o correo" in respuesta
@@ -706,7 +789,7 @@ def test_guardrail_decision_preserva_recuperacion_memoria(monkeypatch):
 
     respuesta, estado = manejar_mensaje("esta bien, yo ya tuve una session contigo y quiero continuarla", estado)
 
-    assert estado.intencion == "resume_previous"
+    assert estado.intencion == "retomar_previa"
     assert estado.etapa == "memoria_previa"
     assert estado.campos_faltantes == ["contacto"]
     assert "telefono o correo" in respuesta
@@ -725,11 +808,28 @@ def test_fallback_si_llm_decisor_falla_en_recuperacion_memoria(monkeypatch):
 
     respuesta, estado = manejar_mensaje("ya tuvimos una session te di todos mis datos", estado)
 
-    assert estado.intencion == "resume_previous"
+    assert estado.intencion == "retomar_previa"
     assert estado.etapa == "memoria_previa"
     assert estado.campos_faltantes == ["contacto"]
     assert "telefono o correo" in respuesta
     assert "cantidad de asistentes" not in respuesta
+
+
+# Prueba que el guardrail no permita que el LLM convierta un saludo simple en consulta de precio.
+def test_guardrail_decision_preserva_saludo_simple(monkeypatch):
+    monkeypatch.setattr(
+        workflow,
+        "decidir_siguiente_accion_con_agente",
+        lambda mensaje_usuario, estado: "responder_precio",
+    )
+    estado = EstadoCotizacion()
+
+    respuesta, estado = manejar_mensaje("Hola que tal como estas?", estado)
+
+    assert estado.intencion == "saludo"
+    assert estado.etapa == "saludo"
+    assert "tipo de evento" in respuesta
+    assert "precio informativo" not in respuesta
 
 
 # Prueba que pedir otra cotizacion limpie el contexto anterior.
@@ -766,12 +866,12 @@ def test_contacto_despues_de_retomar_busca_memoria_y_si_no_existe_inicia_nueva(m
     estado = EstadoCotizacion()
 
     respuesta, estado = manejar_mensaje("tuve una sesion anterior donde te di ya mis datos", estado)
-    assert estado.intencion == "resume_previous"
+    assert estado.intencion == "retomar_previa"
     assert "telefono o correo" in respuesta
 
     respuesta, estado = manejar_mensaje("989515182", estado)
 
-    assert estado.intencion == "resume_previous"
+    assert estado.intencion == "retomar_previa"
     assert estado.contacto == "989515182"
     assert "No encontre una cotizacion anterior" in respuesta
     assert "Empecemos una nueva cotizacion" in respuesta

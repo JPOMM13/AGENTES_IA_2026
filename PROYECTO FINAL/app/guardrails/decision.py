@@ -8,15 +8,15 @@ from app.estado import EstadoCotizacion
 
 AccionAgente = Literal[
     "pedir_campos_faltantes",
-    "answer_price",
-    "validate_and_recommend",
-    "generate_quote",
-    "show_image",
-    "handoff",
-    "answer_policy",
-    "close",
-    "resume_previous",
-    "new_quote",
+    "responder_precio",
+    "validar_y_recomendar",
+    "generar_cotizacion",
+    "mostrar_imagen",
+    "derivacion",
+    "responder_politica",
+    "cierre",
+    "retomar_previa",
+    "nueva_cotizacion",
 ]
 
 
@@ -25,42 +25,61 @@ def validar_decision_agentica(accion: str | None, mensaje_usuario: str, estado: 
     """Corrige decisiones del LLM antes de permitir que cambien el flujo."""
     texto = mensaje_usuario.lower()
 
-    if estado.intencion == "new_quote" or es_solicitud_nueva_cotizacion(texto):
+    if es_solicitud_generar_cotizacion(texto, estado):
+        decision_validada = "pedir_campos_faltantes"
+        motivo = "cotizacion_sin_minimos"
+        if not estado.campos_faltantes:
+            decision_validada = "generar_cotizacion" if estado.opcion_recomendada else "validar_y_recomendar"
+            motivo = "cotizacion_explicita"
         estado.registrar_log(
             "guardrail_decision_agentica",
-            {"decision_original": accion, "decision_validada": "new_quote", "motivo": "nueva_cotizacion"},
+            {"decision_original": accion, "decision_validada": decision_validada, "motivo": motivo},
         )
-        return "new_quote"
+        return decision_validada  # type: ignore[return-value]
 
-    if estado.intencion == "resume_previous" or es_solicitud_recuperar_memoria(texto):
+    if estado.intencion == "nueva_cotizacion" or es_solicitud_nueva_cotizacion(texto):
         estado.registrar_log(
             "guardrail_decision_agentica",
-            {"decision_original": accion, "decision_validada": "resume_previous", "motivo": "recuperacion_memoria"},
+            {"decision_original": accion, "decision_validada": "nueva_cotizacion", "motivo": "nueva_cotizacion"},
         )
-        return "resume_previous"
+        return "nueva_cotizacion"
 
-    if accion == "handoff" and not es_derivacion_humana_explicita(texto):
+    if estado.intencion == "retomar_previa" or es_solicitud_recuperar_memoria(texto):
+        estado.registrar_log(
+            "guardrail_decision_agentica",
+            {"decision_original": accion, "decision_validada": "retomar_previa", "motivo": "recuperacion_memoria"},
+        )
+        return "retomar_previa"
+
+    if estado.intencion == "saludo":
+        estado.registrar_log(
+            "guardrail_decision_agentica",
+            {"decision_original": accion, "decision_validada": None, "motivo": "saludo_simple"},
+        )
+        return None
+
+    if accion == "derivacion" and not es_derivacion_humana_explicita(texto):
         estado.registrar_log(
             "guardrail_decision_agentica",
             {"decision_original": accion, "decision_validada": None, "motivo": "derivacion_no_explicita"},
         )
         return None
 
-    if accion == "generate_quote" and (estado.campos_faltantes or not estado.opcion_recomendada):
+    if accion == "generar_cotizacion" and (estado.campos_faltantes or not estado.opcion_recomendada):
         estado.registrar_log(
             "guardrail_decision_agentica",
             {"decision_original": accion, "decision_validada": "pedir_campos_faltantes", "motivo": "cotizacion_sin_prerequisitos"},
         )
         return "pedir_campos_faltantes"
 
-    if accion == "show_image" and not estado.cotizacion:
+    if accion == "mostrar_imagen" and not estado.cotizacion:
         estado.registrar_log(
             "guardrail_decision_agentica",
             {"decision_original": accion, "decision_validada": "pedir_campos_faltantes", "motivo": "imagen_sin_cotizacion"},
         )
         return "pedir_campos_faltantes"
 
-    if accion == "validate_and_recommend" and estado.campos_faltantes:
+    if accion == "validar_y_recomendar" and estado.campos_faltantes:
         estado.registrar_log(
             "guardrail_decision_agentica",
             {"decision_original": accion, "decision_validada": "pedir_campos_faltantes", "motivo": "recomendacion_sin_minimos"},
@@ -69,15 +88,15 @@ def validar_decision_agentica(accion: str | None, mensaje_usuario: str, estado: 
 
     if accion in {
         "pedir_campos_faltantes",
-        "answer_price",
-        "validate_and_recommend",
-        "generate_quote",
-        "show_image",
-        "handoff",
-        "answer_policy",
-        "close",
-        "resume_previous",
-        "new_quote",
+        "responder_precio",
+        "validar_y_recomendar",
+        "generar_cotizacion",
+        "mostrar_imagen",
+        "derivacion",
+        "responder_politica",
+        "cierre",
+        "retomar_previa",
+        "nueva_cotizacion",
     }:
         estado.registrar_log(
             "guardrail_decision_agentica",
@@ -115,6 +134,23 @@ def es_solicitud_nueva_cotizacion(texto: str) -> bool:
         r"\b(?:hacer|crear|empezar|iniciar)\s+una\s+nueva\s+(?:cotizacion|cotización|solicitud)\b",
     ]
     return any(re.search(patron, texto) for patron in patrones)
+
+
+# VALIDACION DE INTENCION: acepta un override del extractor solo si tiene evidencia real en el mensaje.
+def validar_override_intencion(intent_override: str | None, texto: str, estado: EstadoCotizacion) -> str | None:
+    """Valida que la intencion propuesta por el LLM extractor no contradiga el texto."""
+    intent = (intent_override or "").strip().lower()
+    if intent == "nueva_cotizacion" and es_solicitud_nueva_cotizacion(texto):
+        return "nueva_cotizacion"
+    if intent == "retomar_previa" and es_solicitud_recuperar_memoria(texto):
+        return "retomar_previa"
+    if intent == "generar_cotizacion" and es_solicitud_generar_cotizacion(texto, estado):
+        return "cotizacion"
+    if intent == "modificar_pedido" and es_solicitud_modificar_pedido(texto):
+        return "modificar_pedido"
+    if intent == "revisar_pedido" and es_solicitud_revisar_pedido(texto):
+        return "revisar_pedido"
+    return None
 
 
 # VALIDACION DE INTENCION: detecta frases para retomar una cotizacion previa desde memoria.
@@ -167,6 +203,101 @@ def es_solicitud_recuperar_memoria(texto: str) -> bool:
         r"\bquiero\s+continuarla\b",
     ]
     return any(re.search(patron, texto) for patron in patrones)
+
+
+# VALIDACION DE INTENCION: detecta una orden explicita o contextual de emitir la cotizacion.
+def es_solicitud_generar_cotizacion(texto: str, estado: EstadoCotizacion | None = None) -> bool:
+    """Detecta si el usuario ya confirmo que quiere generar la cotizacion."""
+    texto = texto.lower()
+    frases = [
+        "genera la cotizacion",
+        "genera la cotización",
+        "generame la cotizacion",
+        "genérame la cotización",
+        "cotizalo",
+        "cotízalo",
+        "emitir cotizacion",
+        "emitir cotización",
+        "genera mi cotizacion",
+        "genera mi cotización",
+        "haz la cotizacion",
+        "haz la cotización",
+        "hazme la cotizacion",
+        "hazme la cotización",
+        "hacer la cotizacion",
+        "hacer la cotización",
+        "emite la cotizacion",
+        "emite la cotización",
+        "emitela",
+        "emítela",
+        "emiteme la cotizacion",
+        "emíteme la cotización",
+        "procedamos",
+        "procede con la cotizacion",
+        "procede con la cotización",
+        "procede con eso",
+        "saca la cotizacion",
+        "saca la cotización",
+        "crea la cotizacion",
+        "crea la cotización",
+        "prepara la cotizacion",
+        "prepara la cotización",
+        "mandame la cotizacion",
+        "mándame la cotización",
+        "haz la proforma",
+        "hacer la proforma",
+        "emite la proforma",
+        "genera la proforma",
+        "generame la proforma",
+        "genérame la proforma",
+    ]
+    if any(frase in texto for frase in frases):
+        return True
+
+    patrones = [
+        r"\b(?:genera|generame|gen[eé]rame|emite|emitir|emiteme|em[ií]teme|haz|hazme|prepara|crea|saca)\b.*\b(?:cotizacion|cotización|proforma)\b",
+        r"\b(?:cotizalo|cotízalo|cotizarlo|proformalo|profórmalo)\b",
+    ]
+    if any(re.search(patron, texto) for patron in patrones):
+        return True
+
+    if not estado or estado.campos_faltantes:
+        return False
+    if not (estado.productos_solicitados or estado.opcion_recomendada):
+        return False
+    confirmaciones_contextuales = [
+        "dale",
+        "ok",
+        "okay",
+        "si",
+        "sí",
+        "procede",
+        "adelante",
+        "hazlo",
+        "listo",
+        "esta bien",
+        "está bien",
+        "con eso",
+        "cerramos",
+        "confirmo",
+        "confirmado",
+    ]
+    return any(re.search(rf"\b{re.escape(frase)}\b", texto) for frase in confirmaciones_contextuales)
+
+
+# VALIDACION DE INTENCION: detecta si el usuario quiere modificar productos o datos del pedido.
+def es_solicitud_modificar_pedido(texto: str) -> bool:
+    """Detecta modificaciones sobre el pedido actual."""
+    return any(
+        term in texto
+        for term in ["cambiar", "modificar", "quitar", "sacar", "sin ", "reemplaza", "reemplázalo", "reemplazalo", "reemplazar", "otra fecha", "otro distrito"]
+    )
+
+
+# VALIDACION DE INTENCION: detecta si el usuario quiere revisar el pedido actual.
+def es_solicitud_revisar_pedido(texto: str) -> bool:
+    """Detecta pedidos de revision o resumen del pedido actual."""
+    return any(term in texto for term in ["revisar pedido", "ver pedido", "mi pedido", "resumen del pedido", "qué tengo", "que tengo"])
 
 
 # GUARDRAIL DE DERIVACION: permite derivar a humano solo si el usuario lo pide explicitamente.

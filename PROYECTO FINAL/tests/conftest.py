@@ -7,6 +7,11 @@ import pytest
 # Ejecuta la responsabilidad de aislar memoria mock.
 @pytest.fixture(autouse=True)
 def aislar_memoria_mock(tmp_path, monkeypatch):
+    monkeypatch.setenv("COTIZADOR_NO_SOBRESCRIBIR_ENV", "true")
+    monkeypatch.setenv("BUSINESS_DATA_SOURCE", "mock")
+    monkeypatch.setenv("MEMORY_DATA_SOURCE", "mock")
+    monkeypatch.setenv("SESSION_STORE", "mock")
+    monkeypatch.setenv("LANGSMITH_TRACING", "false")
     monkeypatch.setattr(session_store, "STORE_PATH", tmp_path / "mock_session_memory.json")
     monkeypatch.setattr(redis_session_store, "REDIS_MOCK_PATH", tmp_path / "mock_redis_session.json")
     monkeypatch.setattr(calendar_store, "CALENDARIO_MOCK_PATH", tmp_path / "mock_calendario_eventos.json")

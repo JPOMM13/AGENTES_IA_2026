@@ -54,6 +54,14 @@ def get_embedding(text: str, model: str):
     )
     return result.data[0].embedding
 
+
+# CIERRE DE RECURSOS: expone el cierre del pool GCP sin acoplar scripts a entrega-john/datos.py.
+def cerrar_pool_rag() -> None:
+    """Cierra el pool de conexiones usado por el retriever GCP."""
+    cerrar = getattr(datos, "cerrar_pool", None)
+    if cerrar:
+        cerrar()
+
 def retrieve_chunks(
     query: str,
     top_k: int = 5,

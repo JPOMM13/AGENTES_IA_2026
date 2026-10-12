@@ -14,7 +14,7 @@ from app.tools.catalogo import mock_buscar_catalogo
 from app.tools.calendario import mock_registrar_evento_cotizado, mock_validar_calendario_eventos
 from app.tools.cobertura import mock_validar_cobertura
 from app.tools.dimensionamiento import mock_dimensionar_evento
-from app.tools.extraccion import extraer_intencion_y_campos
+from app.tools.extraccion import extraer_intencion_y_campos, extraer_productos_mencionados
 from app.tools.derivacion import mock_derivar_whatsapp
 from app.tools.precios import mock_comparar_opciones, mock_generar_cotizacion
 from app.tools.consulta_rag import buscar_rag
@@ -38,15 +38,17 @@ def manejar_mensaje(mensaje_usuario: str, estado: EstadoCotizacion) -> tuple[str
 def preparar_turno_usuario(mensaje_usuario: str, estado: EstadoCotizacion) -> EstadoCotizacion:
     """Registra el mensaje, extrae intencion/campos y actualiza memoria operativa."""
     estado.mensajes.append({"role": "user", "content": mensaje_usuario})
+    campos_faltantes_antes = list(estado.campos_faltantes)
     extraction = extraer_intencion_y_campos(mensaje_usuario, estado)
     estado.registrar_log("extraer_intencion_y_campos", extraction)
     fusionar_extraccion_en_estado(estado, extraction)
+    asegurar_productos_mencionados_si_eran_faltantes(mensaje_usuario, estado, campos_faltantes_antes)
     estado.campos_faltantes = encontrar_campos_faltantes(estado)
     estado.registrar_log("tool_readiness", obtener_disponibilidad_tools(mensaje_usuario, estado))
     return estado
 
 
-# MEMORIA MOCK: resuelve recuperacion de cotizacion previa o elecciones pendientes antes de ejecutar negocio.
+# MEMORIA PERSISTENTE: resuelve recuperacion de cotizacion previa o elecciones pendientes antes de ejecutar negocio.
 def resolver_memoria_y_elecciones_previas(mensaje_usuario: str, estado: EstadoCotizacion) -> tuple[str, EstadoCotizacion, str] | None:
     """Resuelve recuperacion de memoria o eleccion pendiente antes de llamar tools."""
     pending_response = manejar_eleccion_previa_pendiente(mensaje_usuario, estado)
@@ -74,61 +76,61 @@ def decidir_accion_agentica_turno(mensaje_usuario: str, estado: EstadoCotizacion
 
 # WORKFLOW DE NEGOCIO: ejecuta la rama correspondiente segun la intencion validada del turno.
 def ejecutar_decision_negocio(mensaje_usuario: str, estado: EstadoCotizacion) -> tuple[str, EstadoCotizacion, str]:
-    """Ejecuta las tools mock y reglas de negocio segun el estado/intencion."""
+    """Ejecuta las tools de negocio segun el estado/intencion."""
     if estado.errores_validacion_campos:
         respuesta = renderizar_respuesta_validacion_campos(estado)
         return respuesta, estado, "validacion_campos"
 
-    if estado.intencion == "image_request":
+    if estado.intencion == "solicitud_imagen":
         respuesta = renderizar_respuesta_solicitud_imagen(estado)
         return respuesta, estado, "imagen"
 
-    if estado.intencion == "close":
+    if estado.intencion == "cierre":
         respuesta = renderizar_respuesta_cierre(estado)
         return respuesta, estado, "cierre"
 
-    if estado.intencion == "memory_check":
+    if estado.intencion == "consulta_memoria":
         respuesta = renderizar_respuesta_consulta_memoria(estado)
         return respuesta, estado, "memoria"
 
-    if estado.intencion == "resume_previous":
+    if estado.intencion == "retomar_previa":
         respuesta, estado = manejar_retomar_previa(estado)
         return respuesta, estado, "memoria_previa"
 
-    if estado.intencion == "greeting":
+    if estado.intencion == "saludo":
         respuesta = renderizar_respuesta_saludo(estado)
         return respuesta, estado, "saludo"
 
-    if estado.intencion == "review_order":
+    if estado.intencion == "revisar_pedido":
         respuesta = renderizar_respuesta_revision_pedido(estado)
         return respuesta, estado, "revision_pedido"
 
-    if estado.intencion == "general_question":
+    if estado.intencion == "consulta_general":
         respuesta = renderizar_respuesta_rag(mensaje_usuario)
         return respuesta, estado, "politica"
 
-    if estado.intencion == "price_query":
+    if estado.intencion == "consulta_precio":
         respuesta = renderizar_respuesta_consulta_precio(mensaje_usuario, estado)
         return respuesta, estado, "consulta_precio"
 
-    if estado.intencion == "human_handoff":
+    if estado.intencion == "derivacion_humana":
         estado.derivacion_confirmada = True
         handoff = mock_derivar_whatsapp(estado, reason="Solicitud explicita del usuario.")
         estado.resumen_derivacion = handoff
         respuesta = renderizar_respuesta_derivacion(handoff)
         return respuesta, estado, "derivacion"
 
-    if estado.intencion in {"discount_request", "payment_request"}:
+    if estado.intencion in {"solicitud_descuento", "solicitud_pago"}:
         estado.derivacion_ofrecida = True
         respuesta = pedir_confirmacion_derivacion(estado)
         return respuesta, estado, "derivacion_ofrecida"
 
-    if estado.intencion == "modify_request":
+    if estado.intencion == "modificar_pedido":
         respuesta = renderizar_respuesta_revision_pedido(estado)
         if not estado.cambio_producto_limpio_no_soportados:
             return respuesta, estado, "pedido_modificado"
 
-    if estado.intencion == "handoff_confirmation" and estado.derivacion_ofrecida:
+    if estado.intencion == "confirmacion_derivacion" and estado.derivacion_ofrecida:
         estado.derivacion_confirmada = True
         handoff = mock_derivar_whatsapp(estado, reason="Usuario acepta derivacion por WhatsApp.")
         estado.resumen_derivacion = handoff
@@ -139,7 +141,7 @@ def ejecutar_decision_negocio(mensaje_usuario: str, estado: EstadoCotizacion) ->
     if estado.distrito and "distrito" not in estado.campos_faltantes and estado.cobertura_ok is not True:
         coverage = mock_validar_cobertura(estado)
         estado.cobertura_ok = coverage["ok"]
-        estado.registrar_log("mock_validar_cobertura_temprana", coverage)
+        estado.registrar_log("validar_cobertura_temprana", coverage)
         if not coverage["ok"]:
             respuesta = renderizar_respuesta_sin_cobertura(estado, coverage)
             return respuesta, estado, "sin_cobertura"
@@ -154,39 +156,39 @@ def ejecutar_decision_negocio(mensaje_usuario: str, estado: EstadoCotizacion) ->
 
     coverage = mock_validar_cobertura(estado)
     estado.cobertura_ok = coverage["ok"]
-    estado.registrar_log("mock_validar_cobertura", coverage)
+    estado.registrar_log("validar_cobertura", coverage)
     if not coverage["ok"]:
         respuesta = renderizar_respuesta_sin_cobertura(estado, coverage)
         return respuesta, estado, "sin_cobertura"
 
     calendario = mock_validar_calendario_eventos(estado)
     estado.calendario_ok = calendario["ok"]
-    estado.registrar_log("mock_validar_calendario_eventos", calendario)
+    estado.registrar_log("validar_calendario_eventos", calendario)
     if not calendario["ok"]:
         respuesta = renderizar_respuesta_fecha_ocupada(estado, calendario)
         return respuesta, estado, "fecha_ocupada"
 
     catalog_result = mock_buscar_catalogo(estado)
     estado.opciones_catalogo = catalog_result["options"]
-    estado.registrar_log("mock_product_catalog", {"products": catalog_result["products"]})
-    estado.registrar_log("mock_buscar_catalogo", catalog_result)
+    estado.registrar_log("catalogo_productos", {"products": catalog_result["products"]})
+    estado.registrar_log("buscar_catalogo", catalog_result)
 
     availability = mock_validar_disponibilidad(estado, estado.opciones_catalogo)
     estado.opciones_validas = availability["available_options"]
     estado.opciones_descartadas = availability["opciones_descartadas"]
     estado.disponibilidad_ok = bool(estado.opciones_validas)
-    estado.registrar_log("mock_validar_disponibilidad", availability)
+    estado.registrar_log("validar_disponibilidad", availability)
     estado.dimensionamiento = mock_dimensionar_evento(estado)
-    estado.registrar_log("mock_dimensionar_evento", estado.dimensionamiento)
+    estado.registrar_log("dimensionar_evento", estado.dimensionamiento)
 
     if estado.opciones_validas:
         comparison = mock_comparar_opciones(estado)
         estado.opcion_recomendada = comparison["recommended"]
         estado.opcion_recomendada["origen"] = "package"
-        estado.registrar_log("mock_comparar_opciones", comparison)
+        estado.registrar_log("comparar_opciones", comparison)
     else:
         stock_result = mock_validar_stock_productos(estado, estado.dimensionamiento["items"], catalog_result["all_products"])
-        estado.registrar_log("mock_validar_stock_productos", stock_result)
+        estado.registrar_log("validar_stock_productos", stock_result)
         if stock_result["missing_items"]:
             estado.disponibilidad_ok = False
             estado.productos_sin_stock = [item["concept"] for item in stock_result["missing_items"]]
@@ -201,9 +203,9 @@ def ejecutar_decision_negocio(mensaje_usuario: str, estado: EstadoCotizacion) ->
 
     if estado.intencion == "cotizacion" or _parece_confirmacion_cotizacion(mensaje_usuario):
         estado.cotizacion = mock_generar_cotizacion(estado)
-        estado.registrar_log("mock_generar_cotizacion", estado.cotizacion)
+        estado.registrar_log("generar_cotizacion", estado.cotizacion)
         reserva_evento = mock_registrar_evento_cotizado(estado)
-        estado.registrar_log("mock_registrar_evento_cotizado", reserva_evento)
+        estado.registrar_log("registrar_evento_cotizado", reserva_evento)
         estado.imagen_artefacto_cotizacion = generar_artefacto_visual_cotizacion(estado)
         estado.registrar_log("generar_artefacto_visual_cotizacion", {"path": estado.imagen_artefacto_cotizacion})
         respuesta = renderizar_respuesta_cotizacion(estado)
@@ -213,7 +215,7 @@ def ejecutar_decision_negocio(mensaje_usuario: str, estado: EstadoCotizacion) ->
     return respuesta, estado, "recomendacion"
 
 
-# PERSISTENCIA/SALIDA: guarda memoria mock y pule la respuesta antes de devolverla a Streamlit.
+# PERSISTENCIA/SALIDA: guarda memoria y pule la respuesta antes de devolverla a Streamlit.
 def finalizar_turno_cotizador(respuesta: str, estado: EstadoCotizacion, etapa: str) -> tuple[str, EstadoCotizacion]:
     """Aplica pulido, memoria visible y persistencia despues del grafo."""
     return _finalizar(respuesta, estado, etapa)
@@ -227,9 +229,9 @@ def fusionar_extraccion_en_estado(estado: EstadoCotizacion, extraction: dict) ->
     estado.errores_validacion_campos = []
     fields = extraction.get("fields", {})
     estado.errores_validacion_campos = list(fields.get("errores_validacion_campos", []))
-    if estado.intencion == "new_quote":
+    if estado.intencion == "nueva_cotizacion":
         limpiar_estado_para_nueva_cotizacion(estado)
-        estado.intencion = "recommendation"
+        estado.intencion = "recomendacion"
     if fields.get("product_changes"):
         aplicar_cambios_productos(estado, fields["product_changes"])
 
@@ -264,13 +266,36 @@ def fusionar_extraccion_en_estado(estado: EstadoCotizacion, extraction: dict) ->
         if product not in estado.productos_solicitados_no_soportados:
             estado.productos_solicitados_no_soportados.append(product)
 
-    if estado.intencion == "modify_request":
+    if estado.intencion == "modificar_pedido":
         estado.cotizacion = None
         estado.opcion_recomendada = None
         estado.opciones_catalogo = []
         estado.opciones_validas = []
         estado.opciones_descartadas = []
         estado.dimensionamiento = None
+
+
+# GUARDRAIL DE PRODUCTOS: si el flujo pidio productos y el usuario los dio, no deja que el LLM los ignore.
+def asegurar_productos_mencionados_si_eran_faltantes(
+    mensaje_usuario: str,
+    estado: EstadoCotizacion,
+    campos_faltantes_antes: list[str],
+) -> None:
+    """Guarda productos concretos dados como respuesta directa al pedido de productos."""
+    if "productos_solicitados" not in campos_faltantes_antes:
+        return
+    productos_mencionados = extraer_productos_mencionados(mensaje_usuario)
+    if not productos_mencionados:
+        return
+    for producto in productos_mencionados:
+        if producto not in estado.productos_solicitados:
+            estado.productos_solicitados.append(producto)
+    if estado.intencion in {"revisar_pedido", "modificar_pedido"}:
+        estado.intencion = "recomendacion"
+    estado.registrar_log(
+        "guardrail_productos_mencionados",
+        {"productos_agregados": productos_mencionados, "motivo": "respuesta_a_productos_faltantes"},
+    )
 
 
 # MEMORIA TEMPORAL: reinicia datos de cotizacion cuando el usuario pide una nueva solicitud.
@@ -311,19 +336,19 @@ def limpiar_estado_para_nueva_cotizacion(estado: EstadoCotizacion) -> None:
     estado.errores_validacion_campos = []
 
 
-# MEMORIA MOCK: busca una cotizacion previa usando el contacto como identificador principal.
+# MEMORIA PERSISTENTE: busca una cotizacion previa usando el contacto como identificador principal.
 def detectar_conversacion_previa_por_contacto(estado: EstadoCotizacion) -> str | None:
     """Busca automaticamente memoria previa cuando aparece un contacto."""
-    if not estado.contacto or estado.estado_previo_pendiente or estado.intencion == "resume_previous":
+    if not estado.contacto or estado.estado_previo_pendiente or estado.intencion == "retomar_previa":
         return None
-    # MOCK: AQUI SE CONSULTARIA POSTGRESQL/NOSQL POR TELEFONO/CORREO PARA SABER SI EXISTE UNA COTIZACION PREVIA.
+    # MEMORIA PERSISTENTE: consulta por telefono/correo para saber si existe una cotizacion previa.
     previo = QUOTE_MEMORY.buscar_por_contacto(estado.contacto)
     if not previo or previo.id_sesion == estado.id_sesion:
         return None
     if not tiene_memoria_cotizacion_util(previo):
         return None
     estado.estado_previo_pendiente = previo.a_diccionario_persistido()
-    estado.intencion = "previous_found"
+    estado.intencion = "previa_encontrada"
     estado.registrar_log(
         "previous_conversation_found_by_contact",
         {"contacto": estado.contacto, "previous_session_id": previo.id_sesion},
@@ -331,7 +356,7 @@ def detectar_conversacion_previa_por_contacto(estado: EstadoCotizacion) -> str |
     return renderizar_respuesta_previa_encontrada(estado, previo)
 
 
-# MEMORIA MOCK: maneja si el usuario quiere retomar o descartar una cotizacion recuperada.
+# MEMORIA PERSISTENTE: maneja si el usuario quiere retomar o descartar una cotizacion recuperada.
 def manejar_eleccion_previa_pendiente(mensaje_usuario: str, estado: EstadoCotizacion) -> tuple[str, EstadoCotizacion] | None:
     """Resuelve si el usuario quiere retomar lo previo o seguir con lo actual."""
     if not estado.estado_previo_pendiente:
@@ -355,7 +380,7 @@ def manejar_eleccion_previa_pendiente(mensaje_usuario: str, estado: EstadoCotiza
         retomado.estado_previo_pendiente = None
         invalidar_cotizacion_recuperada_para_revalidar(retomado)
         retomado.campos_faltantes = encontrar_campos_faltantes(retomado)
-        retomado.registrar_log("resume_previous_after_contact_match", {"contacto": retomado.contacto})
+        retomado.registrar_log("retomar_previa_despues_coincidencia_contacto", {"contacto": retomado.contacto})
         return renderizar_respuesta_previa_retomada(retomado), retomado
     if wants_current:
         estado.estado_previo_pendiente = None
@@ -427,7 +452,7 @@ def aplicar_cambios_productos(estado: EstadoCotizacion, changes: dict[str, list[
 # VALIDACION DE PRODUCTOS: decide si los productos nuevos deben sumarse al pedido actual.
 def debe_fusionar_productos_solicitados(intencion: str | None, changes: dict) -> bool:
     """Evita reinsertar productos cuando el usuario esta quitando o reemplazando."""
-    if intencion != "modify_request":
+    if intencion != "modificar_pedido":
         return True
     return bool(changes.get("add")) and not any(changes.get(key) for key in ["remove", "replace_from", "replace_to"])
 
@@ -436,24 +461,24 @@ def debe_fusionar_productos_solicitados(intencion: str | None, changes: dict) ->
 def aplicar_accion_agente_a_intencion(accion: str, estado: EstadoCotizacion, mensaje_usuario: str) -> None:
     """Convierte la decision del agente en una intencion ejecutable."""
     mapping = {
-        "answer_price": "price_query",
-        "generate_quote": "cotizacion",
-        "show_image": "image_request",
-        "answer_policy": "general_question",
-        "close": "close",
-        "resume_previous": "resume_previous",
-        "new_quote": "recommendation",
+        "responder_precio": "consulta_precio",
+        "generar_cotizacion": "cotizacion",
+        "mostrar_imagen": "solicitud_imagen",
+        "responder_politica": "consulta_general",
+        "cierre": "cierre",
+        "retomar_previa": "retomar_previa",
+        "nueva_cotizacion": "recomendacion",
     }
-    if accion == "handoff":
+    if accion == "derivacion":
         if es_solicitud_derivacion_explicita(mensaje_usuario):
-            estado.intencion = "human_handoff"
+            estado.intencion = "derivacion_humana"
         return
     if accion in mapping:
         estado.intencion = mapping[accion]
     elif accion == "pedir_campos_faltantes":
-        estado.intencion = "recommendation"
-    elif accion == "validate_and_recommend":
-        estado.intencion = "recommendation"
+        estado.intencion = "recomendacion"
+    elif accion == "validar_y_recomendar":
+        estado.intencion = "recomendacion"
 
 
 # VALIDACION DE MINIMOS: calcula que datos faltan antes de consultar tools de negocio.
@@ -520,12 +545,12 @@ def pedir_campos_faltantes_para_estado(estado: EstadoCotizacion) -> str:
     return respuesta
 
 
-# TOOL MOCK/CATALOGO: lista productos y servicios mock disponibles para que el usuario elija.
+# TOOL CATALOGO: lista productos y servicios disponibles para que el usuario elija.
 def pedir_productos_con_catalogo(estado: EstadoCotizacion) -> str:
     """Muestra opciones de catalogo cuando faltan productos/servicios."""
     catalog_result = mock_buscar_catalogo(estado)
     estado.registrar_log(
-        "mock_catalog_options_for_product_selection",
+        "catalog_options_for_product_selection",
         {
             "products": catalog_result["all_products"],
             "packages": paquetes_seleccionables_para_estado(estado),
@@ -547,16 +572,16 @@ def pedir_productos_con_catalogo(estado: EstadoCotizacion) -> str:
     if not sections:
         return (
             "Ya tengo los datos principales, pero necesito saber que productos o servicios quieres cotizar. "
-            "Puedes pedirme bebidas, hielo, bartender o bar movil, y validare contra el catalogo mock."
+            "Puedes pedirme bebidas, hielo, bartender o bar movil, y validare contra el catalogo disponible."
         )
     return (
-        "Ya tengo los datos principales. Para seguir, elige que productos o servicios quieres cotizar de este catalogo mock:\n\n"
+        "Ya tengo los datos principales. Para seguir, elige que productos o servicios quieres cotizar de este catalogo:\n\n"
         + "\n\n".join(sections)
         + "\n\nPuedes responder con una lista simple, por ejemplo: `cerveza, vino y hielo`."
     )
 
 
-# TOOL MOCK/CATALOGO: filtra paquetes mock compatibles con el estado de la cotizacion.
+# TOOL CATALOGO: filtra paquetes compatibles con el estado de la cotizacion.
 def paquetes_seleccionables_para_estado(estado: EstadoCotizacion) -> list[dict]:
     """Lista paquetes que tienen sentido para el evento y capacidad."""
     packages = []
@@ -618,16 +643,16 @@ def fecha_evento_es_valida(value: str) -> bool:
 # DERIVACION HUMANA: ofrece WhatsApp solo como opcion, sin derivar hasta que el usuario lo pida.
 def pedir_confirmacion_derivacion(estado: EstadoCotizacion) -> str:
     """Ofrece derivacion humana para casos que el flujo no puede resolver."""
-    if estado.intencion == "discount_request":
+    if estado.intencion == "solicitud_descuento":
         reason = "No puedo aprobar descuentos desde el flujo automatico."
-    elif estado.intencion == "payment_request":
-        reason = "No puedo confirmar pagos ni reservas desde esta POC."
+    elif estado.intencion == "solicitud_pago":
+        reason = "No puedo confirmar pagos ni reservas desde el flujo automatico."
     else:
         reason = "Esta solicitud requiere revision humana."
     return f"{reason} Si te parece, puedo dejar el caso listo para que un asesor lo continue por WhatsApp."
 
 
-# RESPUESTA DE NEGOCIO: muestra recomendacion basada en catalogo, cobertura, stock y precios mock.
+# RESPUESTA DE NEGOCIO: muestra recomendacion basada en catalogo, cobertura, stock y precios.
 def renderizar_respuesta_recomendacion(estado: EstadoCotizacion) -> str:
     """Redacta la recomendacion validada antes de emitir cotizacion."""
     option = estado.opcion_recomendada or {}
@@ -643,7 +668,7 @@ def renderizar_respuesta_recomendacion(estado: EstadoCotizacion) -> str:
             for item in option.get("items", [])
         )
         return (
-            f"Listo, {estado.nombre_cliente}. Revise paquetes, fecha y stock mock. No encontre un paquete disponible que calce completo, "
+            f"Listo, {estado.nombre_cliente}. Revise paquetes, fecha y stock. No encontre un paquete disponible que calce completo, "
             f"pero si pude armar una propuesta con productos disponibles para tu {estado.tipo_evento} de {estado.asistentes} personas "
             f"en {estado.distrito} el {estado.fecha_evento}.\n\n"
             f"{checks}\n\n"
@@ -651,17 +676,17 @@ def renderizar_respuesta_recomendacion(estado: EstadoCotizacion) -> str:
             "Si esta propuesta te parece bien, dime `genera la cotizacion` y la emito con estos productos."
         )
     return (
-        f"Listo, {estado.nombre_cliente}. Ya consulte cobertura, catalogo y disponibilidad mock. "
+        f"Listo, {estado.nombre_cliente}. Ya consulte cobertura, catalogo y disponibilidad. "
         f"Con eso, la mejor opcion que encontre es **{option.get('name')}** para tu {estado.tipo_evento} de "
         f"{estado.asistentes} personas en {estado.distrito} el {estado.fecha_evento}.\n\n"
         f"{checks}\n\n"
         f"{reasons}\n\n"
-        f"Dimensionamiento mock sugerido segun productos solicitados ({', '.join(estado.productos_solicitados)}): {items}.\n\n"
-        "Si quieres que la deje como cotizacion formal de la POC, dime `genera la cotizacion`."
+        f"Dimensionamiento sugerido segun productos solicitados ({', '.join(estado.productos_solicitados)}): {items}.\n\n"
+        "Si quieres que la deje como cotizacion formal, dime `genera la cotizacion`."
     )
 
 
-# RESPUESTA DE COTIZACION: muestra el artefacto final y resumen economico de la cotizacion mock.
+# RESPUESTA DE COTIZACION: muestra el artefacto final y resumen economico de la cotizacion.
 def renderizar_respuesta_cotizacion(estado: EstadoCotizacion) -> str:
     """Redacta el detalle de la cotizacion ya generada."""
     cotizacion = estado.cotizacion or {}
@@ -672,7 +697,7 @@ def renderizar_respuesta_cotizacion(estado: EstadoCotizacion) -> str:
         for item in cotizacion.get("details", [])
     )
     return (
-        f"Listo, genere la Cotizacion mock **{cotizacion.get('quote_id')}** para **{option.get('name')}**.\n"
+        f"Listo, genere la cotizacion **{cotizacion.get('quote_id')}** para **{option.get('name')}**.\n"
         f"Cotizante: {estado.nombre_cliente} | Contacto seguimiento: {estado.contacto}\n\n"
         f"Detalle:\n{details}\n\n"
         f"- Subtotal: {cotizacion.get('currency')} {cotizacion.get('subtotal'):.2f}\n"
@@ -694,7 +719,7 @@ def renderizar_respuesta_consulta_precio(mensaje_usuario: str, estado: EstadoCot
             for item in product_matches
         )
         return (
-            "Claro. Este es el precio informativo mock, sin generar cotizacion ni reservar stock:\n\n"
+            "Claro. Este es el precio informativo, sin generar cotizacion ni reservar stock:\n\n"
             f"{lines}\n\n"
             "Si quieres que lo incluya en una cotizacion, dime `genera la cotizacion` y primero validare los datos necesarios."
         )
@@ -705,7 +730,7 @@ def renderizar_respuesta_consulta_precio(mensaje_usuario: str, estado: EstadoCot
             taxes = round(subtotal * 0.18, 2)
             total = round(subtotal + taxes, 2)
             return (
-                "Claro. Este es el costo informativo mock de la propuesta por productos, sin generar cotizacion todavia:\n\n"
+                "Claro. Este es el costo informativo de la propuesta por productos, sin generar cotizacion todavia:\n\n"
                 f"- Subtotal: PEN {subtotal:.2f}\n"
                 f"- IGV referencial: PEN {taxes:.2f}\n"
                 f"- Total referencial: PEN {total:.2f}\n\n"
@@ -715,7 +740,7 @@ def renderizar_respuesta_consulta_precio(mensaje_usuario: str, estado: EstadoCot
         taxes = round(base_price * 0.18, 2)
         total = round(base_price + taxes, 2)
         return (
-            f"Claro. Este es el costo informativo mock de **{estado.opcion_recomendada['name']}**, sin generar cotizacion todavia:\n\n"
+            f"Claro. Este es el costo informativo de **{estado.opcion_recomendada['name']}**, sin generar cotizacion todavia:\n\n"
             f"- Precio base: {estado.opcion_recomendada['currency']} {base_price:.2f}\n"
             f"- IGV referencial: {estado.opcion_recomendada['currency']} {taxes:.2f}\n"
             f"- Total referencial: {estado.opcion_recomendada['currency']} {total:.2f}\n\n"
@@ -729,7 +754,7 @@ def renderizar_respuesta_consulta_precio(mensaje_usuario: str, estado: EstadoCot
             for item in package_matches
         )
         return (
-            "Claro. Este es el precio informativo mock del paquete, sin validar disponibilidad ni generar cotizacion:\n\n"
+            "Claro. Este es el precio informativo del paquete, sin validar disponibilidad ni generar cotizacion:\n\n"
             f"{lines}\n\n"
             "Para cotizarlo necesito validar evento, fecha, distrito, datos de contacto, preferencias y stock."
         )
@@ -740,7 +765,7 @@ def renderizar_respuesta_consulta_precio(mensaje_usuario: str, estado: EstadoCot
     )
 
 
-# RESPUESTA DE VALIDACION: resume que tools mock fueron consultadas y que resultado dieron.
+# RESPUESTA DE VALIDACION: resume que tools de negocio fueron consultadas y que resultado dieron.
 def renderizar_resumen_validacion(estado: EstadoCotizacion) -> str:
     """Resume cobertura, catalogo y disponibilidad consultados."""
     package_count = len(estado.opciones_catalogo)
@@ -761,7 +786,7 @@ def renderizar_resumen_validacion(estado: EstadoCotizacion) -> str:
     )
 
 
-# TOOL MOCK/PRECIOS: encuentra productos del catalogo mencionados en una consulta de precio.
+# TOOL PRECIOS: encuentra productos del catalogo mencionados en una consulta de precio.
 def buscar_coincidencias_precio(mensaje_usuario: str) -> list[dict]:
     """Busca productos mencionados para responder precio unitario."""
     texto = mensaje_usuario.lower()
@@ -774,7 +799,7 @@ def buscar_coincidencias_precio(mensaje_usuario: str) -> list[dict]:
     return matches
 
 
-# TOOL MOCK/PRECIOS: encuentra paquetes del catalogo mencionados en una consulta de precio.
+# TOOL PRECIOS: encuentra paquetes del catalogo mencionados en una consulta de precio.
 def buscar_coincidencias_precio_paquete(mensaje_usuario: str) -> list[dict]:
     """Busca paquetes mencionados para responder precio base."""
     texto = mensaje_usuario.lower()
@@ -805,7 +830,7 @@ def renderizar_respuesta_sin_stock(estado: EstadoCotizacion, stock_result: dict)
         missing_lines.append(line)
     missing = "\n".join(missing_lines)
     return (
-        "Revise cobertura, catalogo, disponibilidad y stock mock, pero no tengo todo lo necesario para cotizar con seguridad.\n\n"
+        "Revise cobertura, catalogo, disponibilidad y stock, pero no tengo todo lo necesario para cotizar con seguridad.\n\n"
         f"Faltantes:\n{missing}\n\n"
         "No voy a reemplazar productos sin tu confirmacion. Dime si quieres cambiar alguno por una alternativa disponible."
     )
@@ -817,8 +842,8 @@ def renderizar_respuesta_sin_cobertura(estado: EstadoCotizacion, coverage: dict)
     estado.derivacion_ofrecida = False
     distritos_cubiertos = ", ".join(coverage.get("distritos_cubiertos", []))
     return (
-        f"No tengo cobertura mock para **{estado.distrito}**. "
-        f"El distrito **{estado.distrito}** no esta dentro del alcance de cobertura mock, "
+        f"No tengo cobertura para **{estado.distrito}**. "
+        f"El distrito **{estado.distrito}** no esta dentro del alcance de cobertura, "
         "por eso no puedo generar la cotizacion con ese distrito. "
         f"Por ahora puedo cubrir: {distritos_cubiertos}. "
         "Si quieres, dime uno de esos distritos y continuo con la cotizacion."
@@ -827,10 +852,10 @@ def renderizar_respuesta_sin_cobertura(estado: EstadoCotizacion, coverage: dict)
 
 # RESPUESTA DE CALENDARIO: informa cruce de agenda antes de consultar catalogo o cotizar.
 def renderizar_respuesta_fecha_ocupada(estado: EstadoCotizacion, calendario: dict) -> str:
-    """Explica que la fecha/distrito ya tiene una reserva mock."""
+    """Explica que la fecha/distrito ya tiene una reserva registrada."""
     estado.derivacion_ofrecida = False
     return (
-        f"La fecha **{estado.fecha_evento}** para **{estado.distrito}** ya tiene una reserva mock registrada, "
+        f"La fecha **{estado.fecha_evento}** para **{estado.distrito}** ya tiene una reserva registrada, "
         "por eso no puedo avanzar con una cotizacion que cruce agenda. "
         "Dime otra fecha o cambia el distrito y vuelvo a validar disponibilidad."
     )
@@ -853,7 +878,7 @@ def renderizar_respuesta_validacion_campos(estado: EstadoCotizacion) -> str:
     )
 
 
-# TOOL MOCK/RECOMENDACION: arma una opcion cotizable usando productos disponibles validados.
+# TOOL RECOMENDACION: arma una opcion cotizable usando productos disponibles validados.
 def construir_opcion_basada_en_productos(estado: EstadoCotizacion, available_items: list[dict], similar_packages: list[dict]) -> dict:
     """Construye una opcion personalizada usando productos con stock."""
     quote_items = []
@@ -870,10 +895,10 @@ def construir_opcion_basada_en_productos(estado: EstadoCotizacion, available_ite
                 "unit_price": product["unit_price"],
                 "subtotal": subtotal,
             }
-        )
+    )
     reasons = [
         "No habia paquete disponible que calce completo para la solicitud.",
-        "Se usaron productos mock con stock suficiente para la fecha.",
+        "Se usaron productos con stock suficiente para la fecha.",
     ]
     if similar_packages:
         reasons.append(f"Paquete parecido encontrado pero descartado: {similar_packages[0]['name']} ({similar_packages[0]['discard_reason']})")
@@ -926,7 +951,7 @@ def renderizar_respuesta_consulta_memoria(estado: EstadoCotizacion) -> str:
     )
 
 
-# MEMORIA MOCK: solicita contacto o recupera cotizacion anterior segun identificador disponible.
+# MEMORIA PERSISTENTE: solicita contacto o recupera cotizacion anterior segun identificador disponible.
 def manejar_retomar_previa(estado: EstadoCotizacion) -> tuple[str, EstadoCotizacion]:
     """Retoma una cotizacion previa si el usuario confirma identidad."""
     if not estado.contacto:
@@ -937,7 +962,7 @@ def manejar_retomar_previa(estado: EstadoCotizacion) -> tuple[str, EstadoCotizac
             estado,
         )
 
-    # MOCK: AQUI SE CONSULTARIA POSTGRESQL O NOSQL PARA RECUPERAR LA SESSION/COTIZACION ANTERIOR DEL CLIENTE.
+    # MEMORIA PERSISTENTE: consulta PostgreSQL/NoSQL para recuperar la cotizacion anterior del cliente.
     previo = QUOTE_MEMORY.buscar_por_contacto(estado.contacto)
     if not previo or not tiene_memoria_cotizacion_util(previo):
         estado.campos_faltantes = encontrar_campos_faltantes(estado)
@@ -950,10 +975,10 @@ def manejar_retomar_previa(estado: EstadoCotizacion) -> tuple[str, EstadoCotizac
     retomado = QUOTE_MEMORY.hidratar(estado, previo)
     invalidar_cotizacion_recuperada_para_revalidar(retomado)
     retomado.registrar_log(
-        "resume_previous_conversation",
-        {"nombre_cliente": retomado.nombre_cliente, "contacto": retomado.contacto, "resumed_session_id": previo.id_sesion},
+        "retomar_conversacion_previa",
+        {"nombre_cliente": retomado.nombre_cliente, "contacto": retomado.contacto, "id_sesion_retomada": previo.id_sesion},
     )
-    # MOCK: DESPUES DE RECUPERAR POR IDENTIDAD, ESTA COTIZACION SE HIDRATA EN EL SESSION_ID ACTUAL Y SE GUARDARA EN REDIS AL FINAL DEL TURNO.
+    # MEMORIA PERSISTENTE: despues de recuperar por identidad, esta cotizacion se hidrata en el session_id actual.
     retomado.campos_faltantes = encontrar_campos_faltantes(retomado)
     respuesta = (
         f"Listo, retome la ultima cotizacion que tenia para **{retomado.nombre_cliente}** "
@@ -1066,12 +1091,12 @@ def renderizar_respuesta_saludo(estado: EstadoCotizacion) -> str:
     )
 
 
-# RESPUESTA DERIVACION HUMANA: arma enlace mock de WhatsApp cuando el usuario lo solicito.
+# RESPUESTA DERIVACION HUMANA: arma enlace de WhatsApp cuando el usuario lo solicito.
 def renderizar_respuesta_derivacion(handoff: dict) -> str:
-    """Redacta la derivacion mock preparada para WhatsApp."""
+    """Redacta la derivacion preparada para WhatsApp."""
     summary = handoff["summary"]
     return (
-        "Listo, deje preparada una derivacion mock por WhatsApp.\n\n"
+        "Listo, deje preparada una derivacion por WhatsApp.\n\n"
         f"- ID: {handoff['handoff_id']}\n"
         f"- Motivo: {summary['reason']}\n"
         f"- Link: {handoff['url']}\n\n"
@@ -1084,12 +1109,12 @@ def renderizar_respuesta_rag(query: str) -> str:
     """Responde consultas de politica usando el RAG real."""
     return buscar_rag(query)
 
-    # RAG MOCK (desactivado):
+    # RAG LOCAL (desactivado):
     # resultado = mock_buscar_rag(query)
     # if not resultado["matches"]:
-    #     return "No encontre una politica mock relacionada. Para la POC solo tengo anticipacion, feriados y descuentos."
+    #     return "No encontre una politica relacionada. Solo tengo anticipacion, feriados y descuentos."
     # lines = [f"- **{doc['title']}**: {doc['texto']}" for doc in resultado["matches"]]
-    # return "Segun el RAG mock:\n\n" + "\n".join(lines)
+    # return "Segun el RAG local:\n\n" + "\n".join(lines)
 
 
 # VALIDACION DE INTENCION: detecta confirmaciones explicitas para generar cotizacion.
@@ -1108,7 +1133,7 @@ def _finalizar(respuesta: str, estado: EstadoCotizacion, etapa: str) -> tuple[st
     estado.mensajes.append({"role": "assistant", "content": respuesta_con_memoria})
     estado.registrar_log("respuesta", {"etapa": etapa, "content": respuesta_con_memoria})
     if not estado.estado_previo_pendiente:
-        # MOCK: AQUI SE GUARDARIA EL ESTADO DE LA SESSION EN POSTGRESQL O NOSQL PARA RETOMAR LA COTIZACION DESPUES.
+        # MEMORIA PERSISTENTE: guarda el estado para retomar la cotizacion despues.
         QUOTE_MEMORY.guardar(estado)
     ACTIVE_SESSIONS.guardar(estado)
     return respuesta_con_memoria, estado
@@ -1140,7 +1165,7 @@ def renderizar_memoria_temporal(estado: EstadoCotizacion) -> str:
         captured.append(f"preferencias: {', '.join(estado.preferencias)}")
 
     captured_text = "; ".join(captured) if captured else "sin datos capturados todavia"
-    if estado.intencion == "resume_previous" and not estado.contacto:
+    if estado.intencion == "retomar_previa" and not estado.contacto:
         return f"_Tengo en memoria: {captured_text}. Siguiente por confirmar: telefono o correo para buscar la cotizacion anterior._"
     missing = encontrar_campos_faltantes(estado)
     if missing:
@@ -1206,23 +1231,23 @@ def renderizar_respuesta_productos_no_soportados(estado: EstadoCotizacion) -> st
     for product in estado.productos_solicitados_no_soportados:
         suggestions = productos_similares_para(product)
         if suggestions:
-            lines.append(f"- {product}: no lo tengo en catalogo mock. Parecido disponible: {', '.join(suggestions)}.")
+            lines.append(f"- {product}: no lo tengo en catalogo. Parecido disponible: {', '.join(suggestions)}.")
         else:
-            lines.append(f"- {product}: no lo tengo en catalogo mock y no encontre un sustituto parecido.")
+            lines.append(f"- {product}: no lo tengo en catalogo y no encontre un sustituto parecido.")
 
     available_requested = ""
     if estado.productos_solicitados:
         available_requested = f"\n\nSi mantenemos lo disponible, por ahora tengo: {', '.join(estado.productos_solicitados)}."
 
     return (
-        "Antes de cotizar, revise lo que pediste contra el catalogo mock y hay productos que no tengo exactamente:\n\n"
+        "Antes de cotizar, revise lo que pediste contra el catalogo y hay productos que no tengo exactamente:\n\n"
         + "\n".join(lines)
         + available_requested
         + "\n\nDime si quieres reemplazarlo por alguna alternativa disponible o si prefieres cambiar la lista de productos."
     )
 
 
-# TOOL MOCK/CATALOGO: busca productos alternativos por categoria cuando no existe el pedido exacto.
+# TOOL CATALOGO: busca productos alternativos por categoria cuando no existe el pedido exacto.
 def productos_similares_para(product: str) -> list[str]:
     """Devuelve alternativas simples para productos no soportados."""
     suggestions = {

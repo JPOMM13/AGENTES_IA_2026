@@ -1,0 +1,62 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: eventos-backend
+  namespace: eventos
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: eventos-backend
+  template:
+    metadata:
+      labels:
+        app: eventos-backend
+    spec:
+      containers:
+        - name: backend
+          image: localhost/eventos-backend:1.0.0
+          imagePullPolicy: Never
+          ports:
+            - name: http
+              containerPort: 8000
+          envFrom:
+            - configMapRef:
+                name: eventos-backend-config
+            - secretRef:
+                name: eventos-backend-secret
+          readinessProbe:
+            httpGet:
+              path: /api/salud
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /api/salud
+              port: 8000
+            initialDelaySeconds: 30
+            periodSeconds: 30
+          volumeMounts:
+            - name: postgres-certificados
+              mountPath: /app/certs
+              readOnly: true
+            - name: rag-env
+              mountPath: /app/entrega-john/.env
+              subPath: .env
+              readOnly: true
+            - name: rag-certificados
+              mountPath: /app/entrega-john/certs
+              readOnly: true
+      volumes:
+        - name: postgres-certificados
+          secret:
+            secretName: eventos-postgres-certificados
+            defaultMode: 0400
+        - name: rag-env
+          secret:
+            secretName: eventos-rag-env
+        - name: rag-certificados
+          secret:
+            secretName: eventos-rag-certificados
+            defaultMode: 0400
