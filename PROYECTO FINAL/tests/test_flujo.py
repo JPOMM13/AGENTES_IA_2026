@@ -755,6 +755,23 @@ def test_fallback_si_llm_decisor_falla_en_recuperacion_memoria(monkeypatch):
     assert "cantidad de asistentes" not in respuesta
 
 
+# Prueba que el guardrail no permita que el LLM convierta un saludo simple en consulta de precio.
+def test_guardrail_decision_preserva_saludo_simple(monkeypatch):
+    monkeypatch.setattr(
+        workflow,
+        "decidir_siguiente_accion_con_agente",
+        lambda mensaje_usuario, estado: "answer_price",
+    )
+    estado = EstadoCotizacion()
+
+    respuesta, estado = manejar_mensaje("Hola que tal como estas?", estado)
+
+    assert estado.intencion == "greeting"
+    assert estado.etapa == "saludo"
+    assert "tipo de evento" in respuesta
+    assert "precio informativo" not in respuesta
+
+
 # Prueba que pedir otra cotizacion limpie el contexto anterior.
 def test_otra_cotizacion_con_otro_numero_inicia_contexto_nuevo():
     estado = EstadoCotizacion()

@@ -39,6 +39,13 @@ def validar_decision_agentica(accion: str | None, mensaje_usuario: str, estado: 
         )
         return "resume_previous"
 
+    if estado.intencion == "greeting":
+        estado.registrar_log(
+            "guardrail_decision_agentica",
+            {"decision_original": accion, "decision_validada": None, "motivo": "saludo_simple"},
+        )
+        return None
+
     if es_solicitud_generar_cotizacion(texto):
         decision_validada = "pedir_campos_faltantes"
         motivo = "cotizacion_sin_minimos"
