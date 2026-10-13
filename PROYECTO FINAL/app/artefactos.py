@@ -24,17 +24,17 @@ def generar_artefacto_visual_cotizacion(estado: Any) -> str:
 
     # PRUEBAS DE FLUJO: SE COMENTA LA LLAMADA A OPENAI IMAGES PARA NO CONSUMIR API.
     # AL ESTAR COMENTADO, LA APP USA EL SVG LOCAL GENERADO MAS ABAJO.
-    # image_path = generar_imagen_multimodal_evento(estado)
-    # if image_path:
-    #     return image_path
+    image_path = generar_imagen_multimodal_evento(estado)
+    if image_path:
+        return image_path
 
     # RESPALDO LOCAL CUANDO NO HAY PROVEEDOR MULTIMODAL CONFIGURADO.
     # EN PRODUCCION ESTO DEBERIA SER UNA IMAGEN GENERADA POR EL PROVEEDOR DE IA O UN ASSET GUARDADO EN STORAGE.
-    quote_id = estado.cotizacion.get("quote_id", "cotizacion")
-    filename = f"{nombre_archivo_seguro(quote_id)}_{nombre_archivo_seguro(estado.id_sesion[:8])}.svg"
-    path = ARTIFACT_DIR / filename
-    path.write_text(construir_svg_cotizacion(estado), encoding="utf-8")
-    return str(path)
+    #quote_id = estado.cotizacion.get("quote_id", "cotizacion")
+    #filename = f"{nombre_archivo_seguro(quote_id)}_{nombre_archivo_seguro(estado.id_sesion[:8])}.svg"
+    #path = ARTIFACT_DIR / filename
+    #path.write_text(construir_svg_cotizacion(estado), encoding="utf-8")
+    #return str(path)
 
 
 # ARTEFACTO MULTIMODAL: regenera imagen solo si la cotizacion cambia o no existe artefacto.
@@ -58,56 +58,56 @@ def refrescar_artefacto_visual_si_es_necesario(estado: Any) -> str:
 # MULTIMODAL/IMAGEN: punto donde se llamaria a la API de imagen; ahora puede usar respaldo local si esta comentada.
 def generar_imagen_multimodal_evento(estado: Any) -> str:
     """Llama al proveedor multimodal configurado y guarda un PNG del evento."""
-    estado.registrar_log("generar_imagen_multimodal_evento", {"mensaje": "IMAGEN NO GENERADA"})
-    return ""
+    #estado.registrar_log("generar_imagen_multimodal_evento", {"mensaje": "IMAGEN NO GENERADA"})
+    #return ""
 
     # CODIGO DESACTIVADO PARA PRUEBAS: DESCOMENTAR ESTE BLOQUE PARA VOLVER A CONSUMIR OPENAI IMAGES.
-    # config = obtener_configuracion_generacion_imagen()
-    # if not config.listo:
-    #     estado.registrar_log(
-    #         "generate_multimodal_event_image_skipped",
-    #         {"reason": "IMAGE_GENERATION_ENABLED apagado o API key no configurada"},
-    #     )
-    #     return ""
-    #
-    # prompt = construir_prompt_imagen_evento(estado)
-    # quote_id = estado.cotizacion.get("quote_id", "cotizacion")
-    # filename = f"{nombre_archivo_seguro(quote_id)}_{nombre_archivo_seguro(estado.id_sesion[:8])}.png"
-    # path = ARTIFACT_DIR / filename
-    #
-    # try:
-    #     # MULTIMODAL: ENVIA EL PROMPT A OPENAI IMAGES.
-    #     # EN PRODUCCION EL PROMPT Y LA IMAGEN GENERADA PUEDEN AUDITARSE EN STORAGE/POSTGRES.
-    #     carga = {
-    #         "model": config.model,
-    #         "prompt": prompt,
-    #         "n": 1,
-    #         "size": config.size,
-    #         "quality": config.quality,
-    #     }
-    #     request = Request(
-    #         config.url_imagen,
-    #         data=json.dumps(carga).encode("utf-8"),
-    #         headers={
-    #             "Authorization": f"Bearer {config.clave_api}",
-    #             "Content-Type": "application/json",
-    #         },
-    #         method="POST",
-    #     )
-    #     with urlopen(request, timeout=config.segundos_timeout) as respuesta:
-    #         response_data = json.loads(respuesta.read().decode("utf-8"))
-    #
-    #     b64_data = response_data["data"][0].get("b64_json")
-    #     if not b64_data:
-    #         estado.registrar_log("generate_multimodal_event_image_empty", {"proveedor": config.proveedor})
-    #         return ""
-    #
-    #     path.write_bytes(base64.b64decode(b64_data))
-    #     estado.registrar_log("generar_imagen_multimodal_evento", {"path": str(path), "proveedor": config.proveedor, "model": config.model})
-    #     return str(path)
-    # except (HTTPError, URLError, TimeoutError, KeyError, ValueError) as exc:
-    #     estado.registrar_log("generate_multimodal_event_image_error", {"error": str(exc), "proveedor": config.proveedor})
-    #     return ""
+    config = obtener_configuracion_generacion_imagen()
+    if not config.listo:
+        estado.registrar_log(
+            "generate_multimodal_event_image_skipped",
+            {"reason": "IMAGE_GENERATION_ENABLED apagado o API key no configurada"},
+        )
+        return ""
+
+    prompt = construir_prompt_imagen_evento(estado)
+    quote_id = estado.cotizacion.get("quote_id", "cotizacion")
+    filename = f"{nombre_archivo_seguro(quote_id)}_{nombre_archivo_seguro(estado.id_sesion[:8])}.png"
+    path = ARTIFACT_DIR / filename
+
+    try:
+        # MULTIMODAL: ENVIA EL PROMPT A OPENAI IMAGES.
+        # EN PRODUCCION EL PROMPT Y LA IMAGEN GENERADA PUEDEN AUDITARSE EN STORAGE/POSTGRES.
+        carga = {
+            "model": config.model,
+            "prompt": prompt,
+            "n": 1,
+            "size": config.size,
+            "quality": config.quality,
+        }
+        request = Request(
+            config.url_imagen,
+            data=json.dumps(carga).encode("utf-8"),
+            headers={
+                "Authorization": f"Bearer {config.clave_api}",
+                "Content-Type": "application/json",
+            },
+            method="POST",
+        )
+        with urlopen(request, timeout=config.segundos_timeout) as respuesta:
+            response_data = json.loads(respuesta.read().decode("utf-8"))
+
+        b64_data = response_data["data"][0].get("b64_json")
+        if not b64_data:
+            estado.registrar_log("generate_multimodal_event_image_empty", {"proveedor": config.proveedor})
+            return ""
+
+        path.write_bytes(base64.b64decode(b64_data))
+        estado.registrar_log("generar_imagen_multimodal_evento", {"path": str(path), "proveedor": config.proveedor, "model": config.model})
+        return str(path)
+    except (HTTPError, URLError, TimeoutError, KeyError, ValueError) as exc:
+        estado.registrar_log("generate_multimodal_event_image_error", {"error": str(exc), "proveedor": config.proveedor})
+        return ""
 
 
 # PROMPT MULTIMODAL: describe evento, productos y servicios para generar una imagen coherente.
