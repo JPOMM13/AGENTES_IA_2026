@@ -168,8 +168,12 @@ def validar_entrada(estado_grafo: EstadoGrafoCotizador) -> EstadoGrafoCotizador:
         },
     )
     if not validacion.permitido:
+        # Registra el mensaje del usuario en el historial para que la UI muestre el intercambio.
+        # No se ejecuta preparar_turno_usuario, asi que lo hacemos aqui de forma minima.
+        estado.mensajes.append({"role": "user", "content": mensaje})
         return {
             **estado_grafo,
+            "estado_cotizacion": estado,
             "respuesta_base": validacion.respuesta_segura,
             "etapa": "guardrail_entrada",
             "finalizado": True,

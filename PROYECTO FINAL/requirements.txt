@@ -13,3 +13,6 @@ pdfplumber>=0.11
 langchain-text-splitters>=0.3
 psycopg[binary,pool]>=3.2
 redis>=5.0
+sentry-sdk
+deepteam==1.0.9
+deepeval==4.2.0
