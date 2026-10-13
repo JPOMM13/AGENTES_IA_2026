@@ -1,13 +1,27 @@
 from __future__ import annotations
 
-# RESUMEN: ESTE MODULO IMPLEMENTA EL WORKFLOW AGENTICO CON LANGGRAPH.
-# RESUMEN: EL GRAFO ORQUESTA GUARDRAIL DE ENTRADA, EXTRACCION/ROUTER,
-# MEMORIA PERSISTENTE, DECISION AGENTICA, TOOLS DE NEGOCIO
-# Y GUARDRAIL/EVALUADOR DE SALIDA ANTES DE RESPONDER AL USUARIO.
-# RUTA PRODUCTIVA:
-# main/API -> flujo.manejar_mensaje -> ejecutar_grafo_cotizador -> nodos
-# validar_entrada -> extraer_y_enrutar_intencion -> gestionar_memoria_persistente
-# -> decidir_accion_agentica -> ejecutar_tools_negocio -> evaluar_salida_guardrail.
+# RESUMEN DEL WORKFLOW:
+# Este modulo define el grafo LangGraph del cotizador de eventos.
+# El grafo NO contiene la logica completa de negocio; orquesta nodos pequeños
+# que llaman a funciones del flujo, guardrails, memoria, LLM estructurado y tools.
+#
+# SECUENCIA PRINCIPAL:
+# 1. validar_entrada:
+#    bloquea entradas inseguras y resuelve respuestas contextuales a memoria previa.
+# 2. extraer_y_enrutar_intencion:
+#    guarda el mensaje, clasifica intencion y extrae campos al EstadoCotizacion.
+# 3. gestionar_memoria_persistente:
+#    busca o retoma cotizaciones anteriores por telefono celular.
+# 4. decidir_accion_agentica:
+#    usa el decisor LLM estructurado para proponer la siguiente accion.
+# 5. ejecutar_tools_negocio:
+#    ejecuta cobertura, calendario, catalogo, stock, RAG, cotizacion, imagen y handoff humano.
+# 6. evaluar_salida_guardrail:
+#    valida la respuesta, agrega memoria visible y persiste sesion/memoria.
+#
+# ENTRADA PRODUCTIVA:
+# frontend Streamlit -> FastAPI app/api.py -> flujo.manejar_mensaje -> ejecutar_grafo_cotizador.
+# Tambien existe app/main.py como Streamlit antiguo que llama el mismo flujo.
 
 from functools import lru_cache
 
@@ -30,7 +44,7 @@ from app.flujo import (
 
 
 class EstadoGrafoCotizador(TypedDict, total=False):
-    """Estado interno que viaja entre nodos del grafo LangGraph."""
+    """Estado interno del grafo; envuelve el EstadoCotizacion mas la respuesta del turno."""
 
     mensaje_usuario: str
     estado_cotizacion: EstadoCotizacion
@@ -40,9 +54,9 @@ class EstadoGrafoCotizador(TypedDict, total=False):
     finalizado: bool
 
 
-# NODO LANGGRAPH / ORQUESTADOR: punto de entrada del workflow agentico; recibe el mensaje y ejecuta el grafo completo.
+# ORQUESTADOR LANGGRAPH: crea la entrada del grafo, ejecuta todos los nodos y devuelve la respuesta final.
 def ejecutar_grafo_cotizador(mensaje_usuario: str, estado: EstadoCotizacion) -> tuple[str, EstadoCotizacion]:
-    """Ejecuta el workflow agentico conversacional basado en LangGraph."""
+    """Ejecuta el workflow conversacional del cotizador sobre un EstadoCotizacion existente."""
     configurar_langsmith()
     estado.registrar_log(
         "grafo_inicio",
@@ -74,74 +88,116 @@ def ejecutar_grafo_cotizador(mensaje_usuario: str, estado: EstadoCotizacion) -> 
     return resultado["respuesta_final"], resultado["estado_cotizacion"]
 
 
-# NODO LANGGRAPH / DEFINICION DEL GRAFO: registra nodos, rutas y orden de ejecucion del flujo conversacional.
+# DEFINICION DEL GRAFO: registra nodos, rutas condicionales y orden de ejecucion del workflow.
 @lru_cache(maxsize=1)
 def obtener_grafo_cotizador():
-    """Compila y reutiliza el grafo para no reconstruirlo en cada mensaje."""
+    """Compila y cachea el grafo para reutilizarlo en cada turno sin reconstruir nodos."""
     grafo = StateGraph(EstadoGrafoCotizador)
 
     # NODO validar_entrada:
-    # - Que hace: revisa el texto del usuario antes de usar LLM, memoria o tools.
-    # - LLM/system prompt: no usa LLM ni system prompt; es validacion deterministica.
-    # - Tools/BD: no usa tools, Redis, PostgreSQL negocio ni PostgreSQL NoSQL memory.
+    # - Proposito: primera defensa del flujo antes de extraer datos o ejecutar tools.
+    # - Entrada: mensaje_usuario + EstadoCotizacion actual.
+    # - Acciones:
+    #   1. Resuelve respuestas contextuales a memoria previa como "retomar la anterior"
+    #      o "seguir con esta nueva" antes del guardrail semantico.
+    #   2. Aplica guardrail de entrada para bloquear mensajes inseguros o fuera de alcance.
+    # - LLM/system prompt: no usa system prompt propio; el guardrail puede usar LLM si esta habilitado.
+    # - BD/tools: no consulta Redis, PostgreSQL ni tools de negocio.
+    # - Salida: continua al extractor o finaliza con respuesta segura.
     grafo.add_node("validar_entrada", validar_entrada)
 
     # NODO extraer_y_enrutar_intencion:
-    # - Que hace: entiende que quiere el usuario, extrae campos del evento y actualiza EstadoCotizacion.
-    # - LLM: si LLM_ENABLED=true usa OpenAI segun LLM_PROVIDER=openai y LLM_MODEL del .env.
-    # - System prompts: PROMPT_SISTEMA_CLASIFICADOR_INTENCION para intencion y PROMPT_SISTEMA_EXTRACTOR para campos.
-    # - Tools: usa tool interna registrar_campos_extraidos; no ejecuta negocio.
-    # - BD: no consulta Redis, PostgreSQL negocio ni PostgreSQL NoSQL memory.
+    # - Proposito: convertir lenguaje natural en estado operativo.
+    # - Entrada: mensaje_usuario validado + EstadoCotizacion.
+    # - Acciones:
+    #   1. Agrega el mensaje del usuario al historial.
+    #   2. Clasifica intencion con LLM estructurado cuando LLM_ENABLED=true.
+    #   3. Extrae campos: evento, asistentes, fecha, distrito, nombre, telefono y productos.
+    #   4. Aplica guardrails de extraccion para no inventar datos ni capturar nombres falsos.
+    # - System prompts:
+    #   PROMPT_SISTEMA_CLASIFICADOR_INTENCION y PROMPT_SISTEMA_EXTRACTOR.
+    # - Tools: usa la tool interna registrar_campos_extraidos del extractor agentico.
+    # - BD: no escribe memoria; puede leer referencias de negocio si BUSINESS_DATA_SOURCE=postgres.
+    # - Salida: EstadoCotizacion actualizado con intencion y campos_faltantes.
     grafo.add_node("extraer_y_enrutar_intencion", extraer_y_enrutar_intencion)
 
     # NODO gestionar_memoria_persistente:
-    # - Que hace: busca cotizaciones anteriores por telefono y resuelve si retomar o seguir con la actual.
-    # - LLM/system prompt: no usa LLM actualmente; la eleccion previa pendiente se valida por codigo.
-    # - Tools: no usa tools agenticas.
-    # - BD: con MEMORY_DATA_SOURCE=postgres consulta PostgreSQL NoSQL memory en memory.jpomm_memoria_cotizaciones.
-    # - Redis/PostgreSQL negocio: no usa Redis ni PostgreSQL negocio en este nodo.
+    # - Proposito: decidir si el turno debe continuar con memoria previa o con solicitud actual.
+    # - Entrada: EstadoCotizacion con posible contacto o estado_previo_pendiente.
+    # - Acciones:
+    #   1. Si hay telefono, busca cotizacion anterior en memoria persistente.
+    #   2. Si encuentra una previa util, pide elegir entre retomarla o seguir con la nueva.
+    #   3. Si el usuario ya eligio, hidrata la cotizacion previa o descarta esa memoria.
+    # - LLM/system prompt: no usa LLM; esta parte es deterministica para no mezclar cotizaciones.
+    # - BD: con MEMORY_DATA_SOURCE=postgres consulta PostgreSQL JSONB en schema memory.
+    # - Redis: no consulta Redis directamente; Redis se usa para sesion activa al final del turno.
+    # - Salida: puede finalizar el turno con respuesta de memoria o continuar al decisor.
     grafo.add_node("gestionar_memoria_persistente", gestionar_memoria_persistente)
 
     # NODO decidir_accion_agentica:
-    # - Que hace: decide la siguiente accion del workflow: pedir faltantes, recomendar, cotizar, derivar, etc.
-    # - LLM: si LLM_ENABLED=true usa OpenAI con salida estructurada segun LLM_PROVIDER=openai.
+    # - Proposito: elegir la siguiente accion de alto nivel del workflow.
+    # - Entrada: mensaje_usuario + EstadoCotizacion ya extraido.
+    # - Acciones:
+    #   1. Usa el decisor LLM estructurado para proponer una accion: pedir datos,
+    #      responder precio, validar/recomendar, generar cotizacion, mostrar imagen,
+    #      derivar a humano, responder politica, cerrar, retomar previa o nueva cotizacion.
+    #   2. Pasa esa accion por guardrail deterministico antes de cambiar la intencion.
     # - System prompt: PROMPT_SISTEMA_DECISOR.
-    # - Tools: no ejecuta tools; solo propone una accion y luego el guardrail de decision la valida.
-    # - BD: no consulta Redis, PostgreSQL negocio ni PostgreSQL NoSQL memory.
+    # - Tools: no ejecuta tools de negocio; solo decide la ruta.
+    # - BD: no consulta Redis ni PostgreSQL.
+    # - Salida: EstadoCotizacion con intencion final validada.
     grafo.add_node("decidir_accion_agentica", decidir_accion_agentica)
 
     # NODO ejecutar_tools_negocio:
-    # - Que hace: ejecuta negocio real: cobertura, calendario, catalogo, stock, RAG, recomendacion, cotizacion e imagen.
-    # - LLM/system prompt: no usa un system prompt propio del nodo; RAG usa embeddings/OpenAI y la imagen depende de IMAGE_GENERATION_ENABLED.
-    # - Tools: si usa tools de negocio del cotizador.
-    # - BD: con BUSINESS_DATA_SOURCE=postgres consulta PostgreSQL negocio; con RAG_THRESHOLD configurado puede consultar RAG.
-    # - Redis/PostgreSQL NoSQL memory: no usa Redis ni memoria persistente en este nodo.
+    # - Proposito: ejecutar la accion validada usando reglas y tools reales del cotizador.
+    # - Entrada: EstadoCotizacion con intencion validada.
+    # - Acciones segun intencion:
+    #   1. Recoleccion: pide campos faltantes.
+    #   2. Cobertura: valida distrito.
+    #   3. Calendario: valida fecha disponible y registra evento al cotizar.
+    #   4. Catalogo/stock: busca productos, paquetes, disponibilidad y alternativas.
+    #   5. Recomendacion: arma propuesta cotizable.
+    #   6. Cotizacion: calcula totales, genera imagen y prepara enlace WhatsApp human-in-the-loop.
+    #   7. RAG: responde politicas/recargos desde conocimiento externo.
+    #   8. Derivacion: genera link mock de WhatsApp si el usuario pidio humano.
+    # - LLM/system prompt: no tiene prompt propio; RAG/imagen pueden usar servicios configurados.
+    # - BD: con BUSINESS_DATA_SOURCE=postgres lee/escribe tablas de negocio.
+    # - Redis/memoria: no persiste sesion; eso ocurre en evaluar_salida_guardrail.
+    # - Salida: respuesta_base, etapa y EstadoCotizacion actualizado.
     grafo.add_node("ejecutar_tools_negocio", ejecutar_tools_negocio)
 
     # NODO evaluar_salida_guardrail:
-    # - Que hace: valida la respuesta final, la pule si corresponde, agrega memoria visible y persiste el turno.
-    # - LLM: si LLM_ENABLED=true puede usar OpenAI para pulido final.
-    # - System prompt: SYSTEM_PROMPT en app/llm.py, limitado a reescribir sin inventar datos.
-    # - Tools: no usa tools de negocio.
-    # - BD: con SESSION_STORE=redis guarda sesion corta en Redis; con MEMORY_DATA_SOURCE=postgres guarda memoria persistente en PostgreSQL NoSQL memory.
-    # - PostgreSQL negocio: no consulta tablas de negocio en este nodo.
+    # - Proposito: cerrar el turno con una respuesta segura, trazable y persistida.
+    # - Entrada: respuesta_base + EstadoCotizacion actualizado.
+    # - Acciones:
+    #   1. Aplica guardrail final de salida.
+    #   2. Puede pulir redaccion con LLM sin cambiar datos de negocio.
+    #   3. Agrega memoria visible debajo del mensaje.
+    #   4. Guarda sesion activa y memoria persistente si corresponde.
+    # - System prompt: SYSTEM_PROMPT en app/llm.py para pulido controlado.
+    # - Redis: con SESSION_STORE=redis guarda la sesion activa.
+    # - PostgreSQL NoSQL: con MEMORY_DATA_SOURCE=postgres guarda memoria JSONB.
+    # - PostgreSQL negocio: no consulta catalogo/calendario aqui.
+    # - Salida: respuesta_final lista para API/Streamlit.
     grafo.add_node("evaluar_salida_guardrail", evaluar_salida_guardrail)
 
-    # RUTA LANGGRAPH: primero entra el guardrail de entrada; si bloquea, salta a salida segura.
+    # RUTA 1: todo turno empieza por validar entrada.
+    # Si validar_entrada finaliza, salta directo a evaluar_salida_guardrail.
     grafo.add_edge(START, "validar_entrada")
     grafo.add_conditional_edges(
         "validar_entrada",
         ruta_si_finalizado,
         {"finalizar": "evaluar_salida_guardrail", "continuar": "extraer_y_enrutar_intencion"},
     )
-    # RUTA LANGGRAPH: despues de extraer datos, memoria puede resolver el turno o dejar continuar al decisor.
+    # RUTA 2: si la entrada es valida, se extrae intencion/campos y luego se revisa memoria.
+    # La memoria puede detener el turno si debe pedir confirmacion o si retoma una cotizacion.
     grafo.add_edge("extraer_y_enrutar_intencion", "gestionar_memoria_persistente")
     grafo.add_conditional_edges(
         "gestionar_memoria_persistente",
         ruta_si_finalizado,
         {"finalizar": "evaluar_salida_guardrail", "continuar": "decidir_accion_agentica"},
     )
-    # RUTA LANGGRAPH: el decisor elige accion; las tools ejecutan negocio; salida valida y persiste respuesta.
+    # RUTA 3: si memoria no finaliza, el decisor propone accion, negocio la ejecuta y salida persiste.
     grafo.add_edge("decidir_accion_agentica", "ejecutar_tools_negocio")
     grafo.add_edge("ejecutar_tools_negocio", "evaluar_salida_guardrail")
     grafo.add_edge("evaluar_salida_guardrail", END)
@@ -149,9 +205,11 @@ def obtener_grafo_cotizador():
     return grafo.compile()
 
 
-# GUARDRAIL DE ENTRADA / NODO LANGGRAPH: bloquea mensajes inseguros antes de usar LLM, memoria o tools.
+# NODO 1 / GUARDRAIL DE ENTRADA:
+# Protege el flujo antes de extraer datos. Tambien resuelve elecciones de memoria previa
+# porque frases como "seguir con esta nueva" solo tienen sentido dentro de ese contexto.
 def validar_entrada(estado_grafo: EstadoGrafoCotizador) -> EstadoGrafoCotizador:
-    """Aplica guardrail simple de entrada antes de usar LLM o tools."""
+    """Valida el mensaje inicial y puede finalizar el turno con una respuesta segura."""
     mensaje = estado_grafo["mensaje_usuario"].strip()
     estado = estado_grafo["estado_cotizacion"]
     estado.registrar_log(
@@ -201,9 +259,10 @@ def validar_entrada(estado_grafo: EstadoGrafoCotizador) -> EstadoGrafoCotizador:
     return {**estado_grafo, "finalizado": False}
 
 
-# EXTRACCION / NODO LANGGRAPH: interpreta el mensaje, actualiza memoria temporal y deja lista la intencion del turno.
+# NODO 2 / EXTRACCION Y ROUTER:
+# Interpreta el mensaje, actualiza memoria temporal y deja lista la intencion del turno.
 def extraer_y_enrutar_intencion(estado_grafo: EstadoGrafoCotizador) -> EstadoGrafoCotizador:
-    """Usa extractor LLM/reglas para actualizar estado y dejar la intencion lista."""
+    """Extrae campos e intencion usando LLM estructurado, reglas y guardrails de extraccion."""
     mensaje = estado_grafo["mensaje_usuario"]
     estado_entrada = estado_grafo["estado_cotizacion"]
     estado_entrada.registrar_log(
@@ -225,9 +284,10 @@ def extraer_y_enrutar_intencion(estado_grafo: EstadoGrafoCotizador) -> EstadoGra
     return {**estado_grafo, "estado_cotizacion": estado}
 
 
-# MEMORIA PERSISTENTE / NODO LANGGRAPH: consulta o retoma una cotizacion previa cuando el usuario lo solicita.
+# NODO 3 / MEMORIA PERSISTENTE:
+# Decide si hay cotizacion previa asociada al telefono y si debe retomarse o descartarse.
 def gestionar_memoria_persistente(estado_grafo: EstadoGrafoCotizador) -> EstadoGrafoCotizador:
-    """Consulta memoria persistente si hay contacto o si existe una eleccion pendiente."""
+    """Consulta memoria persistente por telefono y resuelve cotizaciones previas pendientes."""
     mensaje = estado_grafo["mensaje_usuario"]
     estado = estado_grafo["estado_cotizacion"]
     estado.registrar_log(
@@ -254,9 +314,10 @@ def gestionar_memoria_persistente(estado_grafo: EstadoGrafoCotizador) -> EstadoG
     }
 
 
-# DECISOR AGENTICO / NODO LANGGRAPH: permite que el LLM estructurado elija la siguiente accion de alto nivel.
+# NODO 4 / DECISOR AGENTICO:
+# El LLM estructurado propone una accion, pero el guardrail de decision la valida antes de ejecutarla.
 def decidir_accion_agentica(estado_grafo: EstadoGrafoCotizador) -> EstadoGrafoCotizador:
-    """Permite que el decisor LLM estructurado proponga la siguiente accion de alto nivel."""
+    """Calcula la accion del turno y la convierte en una intencion ejecutable."""
     mensaje = estado_grafo["mensaje_usuario"]
     estado_entrada = estado_grafo["estado_cotizacion"]
     estado_entrada.registrar_log(
@@ -277,9 +338,10 @@ def decidir_accion_agentica(estado_grafo: EstadoGrafoCotizador) -> EstadoGrafoCo
     return {**estado_grafo, "estado_cotizacion": estado}
 
 
-# TOOLS DE NEGOCIO / NODO LANGGRAPH: ejecuta catalogo, cobertura, stock, precios y cotizacion.
+# NODO 5 / TOOLS DE NEGOCIO:
+# Ejecuta la logica real del cotizador: validaciones, catalogo, cotizacion, imagen y handoff humano.
 def ejecutar_tools_negocio(estado_grafo: EstadoGrafoCotizador) -> EstadoGrafoCotizador:
-    """Ejecuta reglas de negocio y tools: catalogo, stock, cobertura y cotizacion."""
+    """Ejecuta la rama de negocio correspondiente a la intencion validada."""
     mensaje = estado_grafo["mensaje_usuario"]
     estado_entrada = estado_grafo["estado_cotizacion"]
     estado_entrada.registrar_log(
@@ -307,9 +369,10 @@ def ejecutar_tools_negocio(estado_grafo: EstadoGrafoCotizador) -> EstadoGrafoCot
     }
 
 
-# GUARDRAIL DE SALIDA / NODO LANGGRAPH: valida la respuesta final antes de persistirla y mostrarla al usuario.
+# NODO 6 / GUARDRAIL DE SALIDA Y PERSISTENCIA:
+# Valida, pule, agrega memoria visible y guarda la sesion/memoria despues de cada turno.
 def evaluar_salida_guardrail(estado_grafo: EstadoGrafoCotizador) -> EstadoGrafoCotizador:
-    """Aplica evaluacion final antes de persistir y mostrar la respuesta."""
+    """Prepara la respuesta final segura y persiste el estado actualizado."""
     estado = estado_grafo["estado_cotizacion"]
     respuesta = estado_grafo.get("respuesta_base") or "No pude completar el turno. Intentemos nuevamente con tu solicitud."
     etapa = estado_grafo.get("etapa") or "respuesta"
@@ -338,15 +401,16 @@ def evaluar_salida_guardrail(estado_grafo: EstadoGrafoCotizador) -> EstadoGrafoC
     }
 
 
-# ROUTER LANGGRAPH: decide si el grafo continua al siguiente nodo o salta a la salida final.
+# ROUTER LANGGRAPH: decide si una ruta condicional continua o salta a salida final.
 def ruta_si_finalizado(estado_grafo: EstadoGrafoCotizador) -> str:
-    """Decide si el grafo continua o pasa directo a salida."""
+    """Devuelve 'finalizar' cuando un nodo ya resolvio el turno; si no, devuelve 'continuar'."""
     return "finalizar" if estado_grafo.get("finalizado") else "continuar"
 
 
-# OBSERVABILIDAD / DEBUG: resume el estado para que las trazas sean legibles en el panel tecnico.
+# OBSERVABILIDAD / DEBUG:
+# Resume el estado para logs sin serializar datos enormes como mensajes, opciones completas o imagen.
 def resumir_estado_para_log(estado: EstadoCotizacion) -> dict[str, object]:
-    """Devuelve los valores clave que ayudan a seguir el flujo sin serializar todo el estado."""
+    """Devuelve valores clave para entender en logs que hizo cada nodo."""
     return {
         "id_sesion": estado.id_sesion,
         "etapa": estado.etapa,
