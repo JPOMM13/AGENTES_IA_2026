@@ -105,7 +105,7 @@ def ejecutar_decision_negocio(mensaje_usuario: str, estado: EstadoCotizacion) ->
         return respuesta, estado, "revision_pedido"
 
     if estado.intencion == "consulta_general":
-        respuesta = renderizar_respuesta_rag(mensaje_usuario)
+        respuesta = renderizar_respuesta_rag(mensaje_usuario, estado)
         return respuesta, estado, "politica"
 
     if estado.intencion == "consulta_precio":
@@ -387,6 +387,10 @@ def manejar_eleccion_previa_pendiente(mensaje_usuario: str, estado: EstadoCotiza
             f"{pedir_campos_faltantes_para_estado(estado) if estado.campos_faltantes else renderizar_respuesta_revision_pedido(estado)}"
         )
         return respuesta, estado
+    # Una pregunta de politica no es una respuesta a "retomar o seguir": se contesta con el RAG (ejecutar_decision_negocio)
+    # y ahi mismo se recuerda que la eleccion sigue pendiente. Antes la compuerta repetia la pregunta y bloqueaba todo.
+    if estado.intencion == "consulta_general":
+        return None
     respuesta = (
         "Antes de avanzar, necesito que me confirmes una cosa: encontre una cotizacion previa asociada a ese contacto. "
         "Puedes decir `retomar la anterior` o `seguir con esta nueva`."
@@ -1161,9 +1165,17 @@ def renderizar_respuesta_derivacion(handoff: dict) -> str:
 
 
 # TOOL RAG: responde politicas o conocimiento de negocio desde el RAG real en Supabase.
-def renderizar_respuesta_rag(query: str) -> str:
-    """Responde consultas de politica usando el RAG real."""
-    return buscar_rag(query)
+def renderizar_respuesta_rag(query: str, estado: EstadoCotizacion | None = None) -> str:
+    """Responde consultas de politica con el RAG (con respaldo local) sin perder el hilo de la cotizacion."""
+    respuesta = buscar_rag(query)
+    if estado is not None:
+        estado.registrar_log("rag_consulta_politica", {"pregunta": query[:120]})
+        if estado.estado_previo_pendiente:
+            respuesta += (
+                "\n\nSigue pendiente: encontre una cotizacion previa con ese contacto. "
+                "Dime `retomar la anterior` o `seguir con esta nueva`."
+            )
+    return respuesta
 
     # RAG LOCAL (desactivado):
     # resultado = buscar_rag(query)

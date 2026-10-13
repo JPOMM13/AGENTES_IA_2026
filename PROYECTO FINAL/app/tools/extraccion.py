@@ -130,13 +130,18 @@ def _resolver_intencion_principal(
     texto = mensaje_usuario.lower()
     if es_derivacion_humana_explicita(texto):
         return "derivacion_humana"
+    # PREGUNTA DE SERVICIO: "¿que incluye el servicio de cerveza de barril?" o "¿puedo alquilar solo el equipo sin
+    # cerveza?" mencionan productos pero no piden cambiar el pedido: se responden con el RAG. La regla es
+    # determinística y manda sobre el clasificador cuando este duda entre consulta_general y recomendacion.
+    if es_pregunta_de_servicio(texto) and intencion_clasificada in {None, "consulta_general", "recomendacion", "saludo"}:
+        return "consulta_general"
     if fields.get("product_changes"):
         return "modificar_pedido"
     if estado.intencion == "retomar_previa" and "contacto" in estado.campos_faltantes and fields.get("contacto"):
         return "retomar_previa"
 
     if intencion_clasificada:
-        return _proteger_intencion_clasificada(intencion_clasificada, fields)
+        return _proteger_intencion_clasificada(intencion_clasificada, fields, mensaje_usuario)
 
     override_validado = validar_override_intencion(fields.get("intent_override"), texto, estado)
     if override_validado:
@@ -171,6 +176,7 @@ def _resolver_intencion_respaldo(texto: str, estado: EstadoCotizacion) -> str:
         (lambda: es_solicitud_nueva_cotizacion(texto), "nueva_cotizacion"),
         (lambda: es_solicitud_recuperar_memoria(texto), "retomar_previa"),
         (lambda: _es_retomar_contextual(texto), "retomar_previa"),
+        (lambda: es_pregunta_de_servicio(texto), "consulta_general"),
         (lambda: _es_solo_saludo(texto), "saludo"),
         (lambda: _contiene_alguna(texto, ["ya te di mi nombre", "ya di mi nombre", "te di mi nombre"]), "consulta_memoria"),
         (lambda: _contiene_alguna(texto, ["imagen", "foto", "visual", "muéstrame", "muestrame", "ver como"]), "solicitud_imagen"),
@@ -220,8 +226,12 @@ def _contiene_alguna(texto: str, terminos: list[str]) -> bool:
 
 
 # GUARDRAIL DE ROUTER: evita que una etiqueta del LLM pierda datos explicitos de cotizacion.
-def _proteger_intencion_clasificada(intencion_llm: str, fields: dict[str, Any]) -> str:
+def _proteger_intencion_clasificada(intencion_llm: str, fields: dict[str, Any], mensaje_usuario: str = "") -> str:
     """Corrige clasificaciones incompatibles con datos de negocio extraidos."""
+    # Una PREGUNTA de politica se responde con el RAG aunque el mensaje traiga datos ("tengo 50 personas en un piso 4
+    # sin ascensor, ¿me atienden?"): los campos ya se fusionaron en memoria y la pregunta no debe perderse.
+    if intencion_llm == "consulta_general" and _es_pregunta(mensaje_usuario):
+        return intencion_llm
     hay_datos_cotizacion = any(
         fields.get(key)
         for key in [
@@ -372,13 +382,22 @@ def _extraer_distrito(message: str, esperando_distrito: bool = False) -> str | N
 def _extraer_distrito_libre(message: str, esperando_distrito: bool = False) -> str | None:
     """Extrae un distrito fuera de la lista conocida cuando el usuario lo declara."""
     texto = message.strip()
+    # PREGUNTAS: "¿hacen entregas en feriados?" o "¿me atienden en un piso 4 sin ascensor?" no declaran un distrito.
+    # Antes el "ultimo ' en '" lo convertia en distrito ("Feriados") y la tool de cobertura lo rechazaba, pisando la
+    # pregunta de politica. Solo se acepta un distrito libre en una pregunta si pregunta por cobertura
+    # ("¿atienden en Villa El Salvador?") o si justo le pedimos el distrito.
+    es_pregunta = _es_pregunta(texto)
+    if es_pregunta and not _pregunta_por_cobertura(texto):
+        return None
     posicion_ultimo_en = texto.lower().rfind(" en ")
     if posicion_ultimo_en >= 0:
         candidato_en = _normalizar_distrito_libre(texto[posicion_ultimo_en + 4 :])
-        if candidato_en:
+        # En una pregunta el candidato debe parecer un lugar ("Villa El Salvador"), no media frase
+        # ("Un Piso Sin Ascensor Me Atienden").
+        if candidato_en and (not es_pregunta or len(candidato_en.split()) <= 3):
             return candidato_en
 
-    if esperando_distrito:
+    if esperando_distrito and not es_pregunta:
         candidato_suelto = _normalizar_distrito_libre(texto)
         if candidato_suelto:
             return candidato_suelto
@@ -413,7 +432,46 @@ def _normalizar_distrito_libre(value: str) -> str | None:
         return None
     if any(palabra in {"personas", "persona", "asistentes", "cotizacion", "cotización", "evento"} for palabra in palabras):
         return None
+    # Palabras que siguen a "en" pero no son lugares: "en feriados", "en efectivo", "en el piso 3", "en total".
+    if palabras[0] in {"feriado", "feriados", "efectivo", "total", "general", "piso", "pisos", "ascensor", "cuotas", "la", "el", "un", "una", "ese", "este", "caso"} and len(palabras) <= 2:
+        return None
     return candidato.title()
+
+
+# VALIDACION DE INTENCION: detecta si el mensaje es una pregunta (signos o palabra interrogativa inicial).
+def _es_pregunta(texto: str) -> bool:
+    """Una pregunta se responde; no se toma como declaracion de datos."""
+    limpio = texto.strip().lower()
+    if "?" in limpio or "¿" in limpio:
+        return True
+    inicios = ("que ", "qué ", "cual", "cuál", "como ", "cómo ", "cuanto", "cuánto", "hay ", "pueden ", "puedo ", "tienen ", "hacen ", "atienden ", "incluye", "se puede")
+    return limpio.startswith(inicios)
+
+
+def _pregunta_por_cobertura(texto: str) -> bool:
+    """'¿atienden en X?' / '¿llegan a X?' si declara un lugar: la tool de cobertura debe evaluarlo."""
+    normalizado = texto.lower()
+    return any(term in normalizado for term in ["atienden", "cobertura", "llegan", "cubren", "hacen delivery a", "van a"])
+
+
+# VOCABULARIO DE SERVICIO: lo que el documento de politicas (RAG) explica. Se usa solo como respaldo cuando no hay
+# clasificador LLM: una pregunta con alguno de estos temas se responde con el RAG en vez de pedir datos.
+TEMAS_SERVICIO = [
+    "politica", "política", "anticipacion", "anticipación", "feriado", "recargo", "piso", "ascensor", "incluye",
+    "incluyen", "servicios", "ofrecen", "capacidad", "litros", "vasos", "barril", "barriles", "equipo", "equipos",
+    "personalizad", "etiqueta", "delivery", "entrega", "recojo", "instalacion", "instalación", "descuento",
+    "vigencia", "impuesto", "igv", "cancelar", "cancelacion", "cancelación", "horario", "plazo", "cobertura",
+]
+
+
+def es_pregunta_de_servicio(texto: str) -> bool:
+    """Pregunta de politica/servicio: va al RAG (no a la extraccion de datos)."""
+    normalizado = texto.lower()
+    if any(term in normalizado for term in ["politica", "política", "feriado", "anticipacion", "anticipación"]):
+        return True
+    if not _es_pregunta(normalizado) or any(term in normalizado for term in ["cotiza", "quiero", "necesito", "cuanto cuesta", "cuánto cuesta", "precio", "costo", "cuanto vale", "cuánto vale"]):
+        return False
+    return any(tema in normalizado for tema in TEMAS_SERVICIO)
 
 
 # VALIDACION DE DISTRITO: detecta respuestas cortas que son solo el distrito pedido, para no tomarlas como nombre.

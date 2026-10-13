@@ -58,6 +58,15 @@ def validar_decision_agentica(accion: str | None, mensaje_usuario: str, estado: 
         )
         return None
 
+    # PREGUNTA DE POLITICA: el router ya decidio consulta_general (RAG). El decisor LLM tendia a proponer
+    # "pedir_campos_faltantes" porque faltan datos, y eso convertia la pregunta en un pedido de datos sin responderla.
+    if estado.intencion == "consulta_general":
+        estado.registrar_log(
+            "guardrail_decision_agentica",
+            {"decision_original": accion, "decision_validada": "responder_politica", "motivo": "pregunta_de_politica"},
+        )
+        return "responder_politica"
+
     if accion == "derivacion" and not es_derivacion_humana_explicita(texto):
         estado.registrar_log(
             "guardrail_decision_agentica",
