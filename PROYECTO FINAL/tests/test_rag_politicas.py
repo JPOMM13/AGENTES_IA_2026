@@ -46,6 +46,8 @@ def test_pregunta_de_politica_con_datos_sigue_siendo_consulta_general():
     assert _proteger_intencion_clasificada("consulta_general", fields, "Tengo 50 personas en piso 4, ¿me atienden?") == "consulta_general"
     # Sin pregunta, el guardrail original sigue vigente: datos de cotizacion mandan.
     assert _proteger_intencion_clasificada("consulta_general", fields, "somos 50 personas") == "recomendacion"
+    # Pregunta de cobertura con un lugar: la responde la tool de cobertura (lista vigente), no el documento.
+    assert _proteger_intencion_clasificada("consulta_general", {"distrito": "Villa El Salvador"}, "¿atienden en Villa El Salvador?") == "recomendacion"
 
 
 # REGLAS DE RESPALDO (sin LLM): la pregunta de servicio va al RAG, no a "modificar_pedido" por el "sin " ni a cotizar.
@@ -101,6 +103,20 @@ def test_pregunta_de_politica_a_mitad_no_pierde_la_cotizacion(monkeypatch):
     nuevo = EstadoCotizacion()
     respuesta, nuevo = manejar_mensaje("Hola, antes de cotizar: ¿cuál es su política de anticipación?", nuevo)
     assert "RAG: respuesta" in respuesta and nuevo.tipo_evento is None
+
+
+# FLUJO COMPLETO: un dato que menciona "piso" no es una consulta de politica (regla de pisos solo para preguntas).
+def test_dato_con_piso_no_se_desvia_al_rag(monkeypatch):
+    import app.flujo as flujo
+    from app.flujo import manejar_mensaje
+
+    monkeypatch.setattr(flujo, "buscar_rag", lambda query: "RAG: no deberia usarse")
+    estado = EstadoCotizacion()
+    respuesta, estado = manejar_mensaje("Matrimonio de 80 personas el 15 de diciembre de 2027 en el piso 3 de Miraflores", estado)
+    assert "RAG:" not in respuesta and estado.distrito == "Miraflores" and estado.asistentes == 80
+
+    respuesta, estado = manejar_mensaje("¿hay recargo por ser piso 3?", estado)
+    assert "RAG:" in respuesta and estado.distrito == "Miraflores"
 
 
 # FLUJO COMPLETO: con una cotizacion previa pendiente de "retomar o seguir", la pregunta igual se responde.

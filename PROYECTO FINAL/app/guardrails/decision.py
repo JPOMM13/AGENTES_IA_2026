@@ -67,6 +67,15 @@ def validar_decision_agentica(accion: str | None, mensaje_usuario: str, estado: 
         )
         return "responder_politica"
 
+    # DESCUENTO / PAGO: tienen su propio tratamiento (no se aprueban; se ofrece derivacion al asesor). El decisor
+    # proponia "pedir_campos_faltantes" y la solicitud se perdia en un pedido de datos.
+    if estado.intencion in {"solicitud_descuento", "solicitud_pago"}:
+        estado.registrar_log(
+            "guardrail_decision_agentica",
+            {"decision_original": accion, "decision_validada": None, "motivo": "solicitud_comercial_con_flujo_propio"},
+        )
+        return None
+
     if accion == "derivacion" and not es_derivacion_humana_explicita(texto):
         estado.registrar_log(
             "guardrail_decision_agentica",

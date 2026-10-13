@@ -19,6 +19,7 @@ from app.tools.extraccion import extraer_intencion_y_campos, extraer_productos_m
 from app.tools.derivacion import derivar_whatsapp
 from app.tools.precios import comparar_opciones, generar_cotizacion
 from app.tools.consulta_rag import buscar_rag
+from app.tools.extraccion import es_pregunta_de_servicio
 
 
 REQUIRED_FIELDS = ["tipo_evento", "asistentes", "fecha_evento", "distrito", "nombre_cliente", "contacto", "productos_solicitados"]
@@ -67,7 +68,8 @@ def resolver_memoria_y_elecciones_previas(mensaje_usuario: str, estado: EstadoCo
 # DECISOR AGENTICO: pide al LLM estructurado una accion y luego la pasa por guardrails de decision.
 def decidir_accion_agentica_turno(mensaje_usuario: str, estado: EstadoCotizacion) -> EstadoCotizacion:
     """Usa el decisor LLM estructurado para decidir accion de alto nivel cuando corresponde."""
-    if PATRON_CONSULTA_PISOS.search(mensaje_usuario):
+    # Solo si es una PREGUNTA: "matrimonio de 80 personas en el piso 3 de Miraflores" es un dato, no una consulta.
+    if PATRON_CONSULTA_PISOS.search(mensaje_usuario) and es_pregunta_de_servicio(mensaje_usuario):
         estado.intencion = "consulta_general"
         estado.registrar_log("ruteo_rag_pisos", {"motivo": "consulta_acceso_por_pisos"})
         return estado

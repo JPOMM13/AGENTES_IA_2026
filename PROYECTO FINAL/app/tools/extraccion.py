@@ -231,6 +231,10 @@ def _proteger_intencion_clasificada(intencion_llm: str, fields: dict[str, Any], 
     # Una PREGUNTA de politica se responde con el RAG aunque el mensaje traiga datos ("tengo 50 personas en un piso 4
     # sin ascensor, ¿me atienden?"): los campos ya se fusionaron en memoria y la pregunta no debe perderse.
     if intencion_llm == "consulta_general" and _es_pregunta(mensaje_usuario):
+        # Excepcion: "¿atienden en Villa El Salvador?" declara un lugar. La cobertura la decide la tool (lista
+        # vigente de distritos), no el documento de politicas, que solo dice "se valida en el sistema".
+        if fields.get("distrito") and _pregunta_por_cobertura(mensaje_usuario):
+            return "recomendacion"
         return intencion_llm
     hay_datos_cotizacion = any(
         fields.get(key)
@@ -460,9 +464,9 @@ def _pregunta_por_cobertura(texto: str) -> bool:
 TEMAS_SERVICIO = [
     "politica", "política", "anticipacion", "anticipación", "feriado", "recargo", "piso", "ascensor", "incluye",
     "incluyen", "servicios", "ofrecen", "capacidad", "litros", "vasos", "barril", "barriles", "equipo", "equipos",
-    "personalizad", "etiqueta", "delivery", "entrega", "recojo", "instalacion", "instalación", "descuento",
+    "personalizad", "etiqueta", "delivery", "entrega", "recojo", "instalacion", "instalación",
     "vigencia", "impuesto", "igv", "cancelar", "cancelacion", "cancelación", "horario", "plazo", "cobertura",
-]
+]  # "descuento" no esta: tiene su propio flujo (no se aprueba, se ofrece derivacion al asesor).
 
 
 def es_pregunta_de_servicio(texto: str) -> bool:
