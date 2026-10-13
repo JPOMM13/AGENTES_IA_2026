@@ -4,12 +4,13 @@ import sys
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import FileResponse
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from app.esquemas_api import SolicitudChat, SolicitudSesion, RespuestaSesion, construir_respuesta_sesion
+from app.esquemas_api import SolicitudChat, SolicitudFoto, SolicitudSesion, RespuestaSesion, construir_respuesta_sesion
 from app.estado import EstadoCotizacion
 from app.flujo import manejar_mensaje
 from app.repositorios import RepositorioSesionActiva
@@ -137,3 +138,40 @@ def reiniciar_sesion(id_sesion: str) -> RespuestaSesion:
     # PASO 4:
     # Devuelve al frontend la nueva sesion vacia para iniciar conversacion.
     return construir_respuesta_sesion(estado)
+
+
+# FOTO DEL LOCAL (multimodal): el cliente sube una foto de su espacio y la imagen final de la cotizacion se compone
+# sobre ella con los productos cotizados. Se guarda en disco por id_sesion; solo jpg/png/webp y maximo 8 MB.
+@aplicacion.post("/api/sesiones/{id_sesion}/foto", response_model=RespuestaSesion)
+def subir_foto_local(id_sesion: str, solicitud: SolicitudFoto) -> RespuestaSesion:
+    import base64
+
+    from app.artefactos import guardar_foto_local
+
+    estado = repositorio_sesiones.obtener(id_sesion)
+    if estado is None:
+        raise HTTPException(status_code=404, detail="Sesion no encontrada.")
+    try:
+        datos = base64.b64decode(solicitud.imagen_base64, validate=True)
+    except Exception as error:  # noqa: BLE001
+        raise HTTPException(status_code=400, detail="La imagen no esta en base64 valido.") from error
+    try:
+        ruta = guardar_foto_local(id_sesion, datos, solicitud.nombre)
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    estado.foto_local = ruta
+    estado.registrar_log("foto_local_recibida", {"bytes": len(datos)})
+    repositorio_sesiones.guardar(estado)
+    return construir_respuesta_sesion(estado)
+
+
+# IMAGENES GENERADAS: se sirven por nombre de archivo (sin rutas) para que el frontend las muestre aunque corra en
+# otro contenedor; solo se exponen las carpetas de artefactos y fotos subidas.
+@aplicacion.get("/api/imagenes/{nombre}")
+def descargar_imagen(nombre: str) -> FileResponse:
+    from app.artefactos import ruta_imagen_publica
+
+    ruta = ruta_imagen_publica(nombre)
+    if ruta is None:
+        raise HTTPException(status_code=404, detail="Imagen no encontrada.")
+    return FileResponse(ruta)

@@ -153,3 +153,87 @@ def test_imagen_multimodal_apagada_usa_svg_y_encendida_guarda_png(tmp_path, monk
         raise TimeoutError("sin respuesta")
     monkeypatch.setattr(artefactos, "urlopen", falla)
     assert generar_artefacto_visual_cotizacion(estado).endswith(".svg")
+
+
+# FOTO DEL LOCAL + COMPOSICION: validacion de la foto, rutas publicas sin traversal, referencias por producto y
+# composicion con el proveedor simulado; sin foto se usa la generacion por prompt / SVG.
+def test_foto_local_valida_tipo_y_tamano(tmp_path, monkeypatch):
+    import app.artefactos as artefactos
+    from app.artefactos import guardar_foto_local, ruta_imagen_publica
+
+    monkeypatch.setattr(artefactos, "UPLOAD_DIR", tmp_path / "uploads")
+    monkeypatch.setattr(artefactos, "ARTIFACT_DIR", tmp_path / "generated")
+    ruta = guardar_foto_local("abcdef12-sesion", b"\x89PNG\r\n\x1a\n" + b"0" * 100, "local.png")
+    assert ruta.endswith("local_abcdef12.png")
+    import pytest as _pytest
+    with _pytest.raises(ValueError):
+        guardar_foto_local("s", b"GIF89a" + b"0" * 10, "x.gif")
+    with _pytest.raises(ValueError):
+        guardar_foto_local("s", b"\xff\xd8\xff" + b"0" * (8 * 1024 * 1024 + 1), "grande.jpg")
+    assert ruta_imagen_publica("local_abcdef12.png") is not None
+    assert ruta_imagen_publica("../../.env") is None and ruta_imagen_publica("no_existe.png") is None
+
+
+def test_referencias_de_productos_por_categoria():
+    from app.artefactos import imagenes_referencia_productos
+
+    estado = EstadoCotizacion(tipo_evento="matrimonio", asistentes=30)
+    estado.opcion_recomendada = {"id": "PKG-BAR-100", "name": "Bar movil premium", "items": [{"name": "Bar movil premium"}]}
+    estado.cotizacion = {"quote_id": "COT-X", "total": 1.0, "details": [{"concept": "cerveza"}, {"concept": "hielo"}, {"concept": "agua"}]}
+    nombres = [r.name for r in imagenes_referencia_productos(estado)]
+    assert nombres[0] == "bar_movil.png" and "cerveza.png" in nombres and "hielo.png" in nombres and "agua.png" in nombres
+
+
+def test_composicion_sobre_foto_usa_el_proveedor_y_degrada_si_falla(tmp_path, monkeypatch):
+    import base64, types
+
+    import app.artefactos as artefactos
+    from app.artefactos import generar_artefacto_visual_cotizacion
+
+    monkeypatch.setattr(artefactos, "ARTIFACT_DIR", tmp_path)
+    foto = tmp_path / "local.jpg"; foto.write_bytes(b"\xff\xd8\xff" + b"0" * 50)
+    estado = EstadoCotizacion(tipo_evento="matrimonio", asistentes=30, fecha_evento="2027-02-15", distrito="Miraflores")
+    estado.opcion_recomendada = {"id": "PKG-BAR-100", "name": "Bar movil premium"}
+    estado.cotizacion = {"quote_id": "COT-F", "total": 3304.0, "currency": "PEN", "details": [{"concept": "cerveza"}]}
+    estado.foto_local = str(foto)
+    monkeypatch.setenv("IMAGE_GENERATION_ENABLED", "true"); monkeypatch.setenv("IMAGE_API_KEY", "clave-de-prueba")
+
+    llamadas = {}
+    class ImagenesFalsas:
+        def edit(self, **kwargs):
+            llamadas["edit"] = {"n_imagenes": len(kwargs["image"]), "prompt": kwargs["prompt"]}
+            return types.SimpleNamespace(data=[types.SimpleNamespace(b64_json=base64.b64encode(b"\x89PNGcompuesta").decode())])
+    class ClienteFalso:
+        def __init__(self, api_key=None): self.images = ImagenesFalsas()
+    import openai
+    monkeypatch.setattr(openai, "OpenAI", ClienteFalso)
+    ruta = generar_artefacto_visual_cotizacion(estado)
+    assert ruta.endswith(".png") and (tmp_path / ruta.split("/")[-1]).read_bytes().startswith(b"\x89PNGcompuesta")
+    assert llamadas["edit"]["n_imagenes"] >= 2 and "foto real del local" in llamadas["edit"]["prompt"]
+    assert any(t["evento"] == "componer_imagen_sobre_foto" for t in estado.trazas)
+
+    class ClienteQueFalla:
+        def __init__(self, api_key=None): raise RuntimeError("proveedor caido")
+    monkeypatch.setattr(openai, "OpenAI", ClienteQueFalla)
+    def sin_red(request, timeout=0, context=None): raise TimeoutError("sin red")
+    monkeypatch.setattr(artefactos, "urlopen", sin_red)
+    assert generar_artefacto_visual_cotizacion(estado).endswith(".svg")
+
+
+def test_endpoint_foto_guarda_en_la_sesion(tmp_path, monkeypatch):
+    from fastapi.testclient import TestClient
+
+    import app.artefactos as artefactos
+    from app.api import aplicacion
+
+    monkeypatch.setattr(artefactos, "UPLOAD_DIR", tmp_path)
+    cliente = TestClient(aplicacion)
+    id_sesion = cliente.post("/api/sesiones", json={}).json()["id_sesion"]
+    import base64
+    png = base64.b64encode(b"\x89PNG\r\n\x1a\n" + b"0" * 64).decode()
+    r = cliente.post(f"/api/sesiones/{id_sesion}/foto", json={"imagen_base64": png, "nombre": "local.png"})
+    assert r.status_code == 200 and r.json()["foto_local"].endswith(".png")
+    assert cliente.post(f"/api/sesiones/{id_sesion}/foto", json={"imagen_base64": base64.b64encode(b"GIF89a" + b"0" * 64).decode(), "nombre": "x.gif"}).status_code == 400
+    nombre = r.json()["foto_local"].split("/")[-1]
+    assert cliente.get(f"/api/imagenes/{nombre}").status_code == 200
+    assert cliente.get("/api/imagenes/no-existe.png").status_code == 404

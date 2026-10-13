@@ -55,6 +55,9 @@ class EstadoCotizacion:
     resumen_derivacion: dict[str, Any] | None = None
     imagen_solicitada: bool = False
     imagen_artefacto_cotizacion: str | None = None
+    # FOTO DEL LOCAL: ruta local de la foto que sube el cliente (opcional); con ella la imagen final se compone
+    # sobre su propio espacio con los productos cotizados (multimodal, S17).
+    foto_local: str | None = None
     cambio_producto_limpio_no_soportados: bool = False
     estado_previo_pendiente: dict[str, Any] | None = None
 

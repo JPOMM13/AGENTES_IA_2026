@@ -20,6 +20,13 @@ class SolicitudChat(BaseModel):
     mensaje: str = Field(..., min_length=1)
 
 
+class SolicitudFoto(BaseModel):
+    """Foto del local del cliente, en base64 (jpg, png o webp; maximo 8 MB)."""
+
+    imagen_base64: str = Field(..., min_length=16)
+    nombre: str = "local.jpg"
+
+
 class RespuestaSesion(BaseModel):
     """Contrato API que devuelve una foto serializable del estado del agente."""
 
@@ -30,6 +37,7 @@ class RespuestaSesion(BaseModel):
     mensajes: list[dict[str, str]]
     cotizacion: dict[str, Any] | None = None
     imagen_artefacto_cotizacion: str | None = None
+    foto_local: str | None = None
 
 
 def construir_respuesta_sesion(estado: EstadoCotizacion, respuesta: str | None = None) -> RespuestaSesion:
@@ -43,4 +51,5 @@ def construir_respuesta_sesion(estado: EstadoCotizacion, respuesta: str | None =
         mensajes=estado.mensajes,
         cotizacion=estado.cotizacion,
         imagen_artefacto_cotizacion=estado.imagen_artefacto_cotizacion,
+        foto_local=estado.foto_local,
     )

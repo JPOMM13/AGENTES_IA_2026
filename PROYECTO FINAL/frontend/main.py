@@ -9,7 +9,7 @@ import streamlit as st
 RAIZ = Path(__file__).resolve().parent
 sys.path.insert(0, str(RAIZ))
 
-from cliente_api import ErrorApiCotizador, consultar_sesion_api, crear_sesion_api, enviar_mensaje_api, reiniciar_sesion_api
+from cliente_api import ErrorApiCotizador, consultar_sesion_api, crear_sesion_api, enviar_mensaje_api, reiniciar_sesion_api, subir_foto_api
 from componentes import renderizar_tarjeta_cotizacion, renderizar_tarjeta_imagen
 
 
@@ -120,6 +120,19 @@ with st.container(border=True, key="chat_completo"):
             st.rerun()
         except ErrorApiCotizador as error:
             st.error(f"No se pudo enviar el mensaje: {error}")
+
+# FOTO DEL LOCAL (opcional): con ella la imagen final de la cotizacion se compone sobre el espacio real del cliente.
+with st.sidebar.expander("Foto de tu local (opcional)", expanded=False):
+    archivo = st.file_uploader("Sube una foto del espacio del evento", type=["jpg", "jpeg", "png", "webp"], key="foto_local")
+    if archivo is not None and st.session_state.get("foto_subida") != archivo.name:
+        try:
+            guardar_respuesta(subir_foto_api(respuesta["id_sesion"], archivo.getvalue(), archivo.name))
+            st.session_state.foto_subida = archivo.name
+            st.success("Foto recibida: la imagen de tu cotización se armará sobre tu local.")
+        except ErrorApiCotizador as error:
+            st.error(f"No se pudo subir la foto: {error}")
+    if respuesta.get("foto_local"):
+        st.caption("Foto del local cargada para esta conversación.")
 
 with st.sidebar.expander("Datos técnicos"):
     st.json(respuesta.get("estado_panel", {}))

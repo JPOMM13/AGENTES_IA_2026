@@ -9,3 +9,4 @@ app/data/mock_session_memory.json
 app/data/mock_redis_session.json
 app/data/generated/
 resultados/
+app/data/uploads/

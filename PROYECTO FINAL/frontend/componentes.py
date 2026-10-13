@@ -37,4 +37,7 @@ def renderizar_tarjeta_imagen(respuesta):
         if ruta.startswith(("http://", "https://")) or Path(ruta).is_file():
             st.image(ruta, use_container_width=True)
         else:
-            st.caption("La imagen no está disponible en este servicio.")
+            # El backend puede correr en otro contenedor: la imagen se pide por la API por nombre de archivo.
+            from cliente_api import url_imagen_api
+
+            st.image(url_imagen_api(Path(ruta).name), use_container_width=True)
