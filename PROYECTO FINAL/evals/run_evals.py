@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 import os
 import sys
 import tempfile
@@ -11,15 +12,26 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from app.state import QuoteState
-from app.workflow import manejar_mensaje
-import app.redis_session_store as redis_session_store
-import app.session_store as session_store
+# EVALS / AISLAMIENTO GLOBAL:
+# Evita que el archivo .env productivo sobrescriba estas variables durante los evals.
+# Asi los casos corren sin depender de OpenAI, LangSmith, Redis real ni PostgreSQL real.
+os.environ["COTIZADOR_NO_SOBRESCRIBIR_ENV"] = "true"
+os.environ["SESSION_STORE"] = "mock"
+os.environ["MEMORY_DATA_SOURCE"] = "mock"
+os.environ["BUSINESS_DATA_SOURCE"] = "mock"
+os.environ["LANGSMITH_TRACING"] = "false"
+os.environ["IMAGE_GENERATION_ENABLED"] = "false"
+
+from app.estado import EstadoCotizacion
+from app.flujo import manejar_mensaje
+import app.almacen_calendario as almacen_calendario
+import app.almacen_sesion as almacen_sesion
+import app.almacen_sesion_redis as almacen_sesion_redis
 
 
-# Ejecuta la responsabilidad de main.
+# EVALS / MAIN: ejecuta casos conversacionales completos contra el workflow actual.
 def principal() -> int:
-    parser = argparse.ArgumentParser(description="Run agent behavior evals.")
+    parser = argparse.ArgumentParser(description="Ejecuta evals de comportamiento del agente.")
     parser.add_argument("--cases", default=str(ROOT / "evals" / "cases.json"))
     parser.add_argument("--trace", action="store_true", help="Print workflow trace for each case.")
     parser.add_argument("--with-llm", action="store_true", help="Use configured LLM instead of deterministic mode.")
@@ -27,6 +39,11 @@ def principal() -> int:
 
     if not args.with_llm:
         os.environ["LLM_ENABLED"] = "false"
+
+    # EVALS / LOGS:
+    # Por defecto los evals muestran solo PASS/FAIL. Con --trace se habilita detalle del grafo.
+    if not args.trace:
+        logging.getLogger("cotizador.flujo").setLevel(logging.WARNING)
 
     cases = json.loads(Path(args.cases).read_text(encoding="utf-8"))
     failures = []
@@ -44,18 +61,26 @@ def principal() -> int:
     return 1 if failures else 0
 
 
-# Ejecuta la responsabilidad de ejecutar caso.
+# EVALS / CASO: aisla memoria local, ejecuta setup y luego los mensajes del caso.
 def ejecutar_caso(case: dict[str, Any], trace: bool = False) -> dict[str, Any]:
     with tempfile.TemporaryDirectory() as temp_dir:
         temp_path = Path(temp_dir)
-        session_store.STORE_PATH = temp_path / "mock_session_memory.json"
-        redis_session_store.REDIS_MOCK_PATH = temp_path / "mock_redis_session.json"
+        almacen_sesion.STORE_PATH = temp_path / "mock_session_memory.json"
+        almacen_sesion_redis.REDIS_MOCK_PATH = temp_path / "mock_redis_session.json"
+        almacen_calendario.CALENDARIO_MOCK_PATH = temp_path / "mock_calendario_eventos.json"
+        almacen_calendario.CALENDARIO_MOCK_PATH.write_text("[]", encoding="utf-8")
+
+        # EVALS / AISLAMIENTO:
+        # Fuerza mocks locales para que los evals no dependan de Redis real ni PostgreSQL memory real.
+        os.environ["SESSION_STORE"] = "mock"
+        os.environ["MEMORY_DATA_SOURCE"] = "mock"
+        os.environ.setdefault("BUSINESS_DATA_SOURCE", "mock")
 
         for setup_message in case.get("setup_messages", []):
-            setup_state = QuoteState()
+            setup_state = EstadoCotizacion()
             manejar_mensaje(setup_message, setup_state)
 
-        state = QuoteState()
+        state = EstadoCotizacion()
         responses = []
         for message in case["messages"]:
             response, state = manejar_mensaje(message, state)
@@ -68,26 +93,54 @@ def ejecutar_caso(case: dict[str, Any], trace: bool = False) -> dict[str, Any]:
             print(f"\nTRACE {case['name']}")
             for index, message in enumerate(case["messages"], start=1):
                 print(f"  user[{index}]: {message}")
-            for registrar_log in state.logs:
-                print(f"  {registrar_log['event']}: {json.dumps(registrar_log['payload'], ensure_ascii=False)}")
+            for traza in state.trazas:
+                print(f"  {traza['evento']}: {json.dumps(traza['carga'], ensure_ascii=False)}")
             print(f"  final_state: {json.dumps(snapshot, ensure_ascii=False)}")
 
         return {"passed": not errors, "errors": errors, "state": snapshot}
 
 
-# Ejecuta la responsabilidad de capturar estado.
-def capturar_estado(state: QuoteState) -> dict[str, Any]:
+# EVALS / SNAPSHOT: expone alias antiguos y actuales para comparar cases.json sin reescribirlo completo.
+def capturar_estado(state: EstadoCotizacion) -> dict[str, Any]:
+    recomendado = state.opcion_recomendada or {}
+    cotizacion = state.cotizacion or {}
     return {
         **state.a_diccionario_panel(),
-        "recommended_id": state.recommended_option["id"] if state.recommended_option else None,
-        "recommended_source": state.recommended_option["source"] if state.recommended_option else None,
-        "quote_generated": state.quote is not None,
-        "quote_total": state.quote["total"] if state.quote else None,
-        "stage": state.stage,
+        "event_type": state.tipo_evento,
+        "event_date": state.fecha_evento,
+        "attendees": state.asistentes,
+        "district": state.distrito,
+        "customer_name": state.nombre_cliente,
+        "contact": state.contacto,
+        "requested_products": state.productos_solicitados,
+        "unsupported_requested_products": state.productos_solicitados_no_soportados,
+        "stock_shortage_products": state.productos_sin_stock,
+        "missing_fields": _campos_faltantes_alias(state.campos_faltantes),
+        "availability_ok": state.disponibilidad_ok,
+        "recommended_id": recomendado.get("id"),
+        "recommended_source": recomendado.get("origen") or recomendado.get("source"),
+        "quote_generated": state.cotizacion is not None,
+        "quote_total": cotizacion.get("total"),
+        "handoff_confirmed": state.derivacion_confirmada,
+        "stage": state.etapa,
     }
 
 
-# Ejecuta la responsabilidad de comparar esperado.
+# EVALS / COMPATIBILIDAD: traduce nombres actuales a los nombres historicos de cases.json.
+def _campos_faltantes_alias(campos: list[str]) -> list[str]:
+    equivalencias = {
+        "tipo_evento": "event_type",
+        "asistentes": "attendees",
+        "fecha_evento": "event_date",
+        "distrito": "district",
+        "nombre_cliente": "customer_name",
+        "contacto": "contact",
+        "productos_solicitados": "requested_products",
+    }
+    return [equivalencias.get(campo, campo) for campo in campos]
+
+
+# EVALS / ASSERTS: compara estado final y respuesta final contra lo esperado del caso.
 def comparar_esperado(expected: dict[str, Any], snapshot: dict[str, Any], last_response: str) -> list[str]:
     errors = []
     for key, expected_value in expected.items():
