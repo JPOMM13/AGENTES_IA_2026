@@ -16,6 +16,18 @@ from componentes import renderizar_tarjeta_cotizacion, renderizar_tarjeta_imagen
 st.set_page_config(page_title="Tus eventos", page_icon="💬", layout="wide", initial_sidebar_state="collapsed")
 st.markdown(f"<style>{(RAIZ / 'estilos.css').read_text(encoding='utf-8')}</style>", unsafe_allow_html=True)
 
+if not st.session_state.get("mayor_edad", False):
+    with st.container(border=True, key="portada_edad"):
+        st.title("Tus eventos")
+        st.caption("Asesoría y cotización de servicios y bebidas para eventos")
+        st.markdown("### Confirma tu edad")
+        st.write("Este servicio incluye bebidas alcohólicas.")
+        confirmado = st.checkbox("Confirmo que tengo 18 años o más")
+        if st.button("Continuar", disabled=not confirmado, use_container_width=True):
+            st.session_state.mayor_edad = True
+            st.rerun()
+    st.stop()
+
 
 def guardar_respuesta(respuesta):
     # FRONTEND / SESION:
