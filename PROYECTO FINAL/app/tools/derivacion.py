@@ -7,7 +7,7 @@ from app.estado import EstadoCotizacion
 
 
 # TOOL DERIVACION HUMANA: prepara enlace WhatsApp solo cuando el usuario solicita humano.
-def mock_derivar_whatsapp(estado: EstadoCotizacion, reason: str) -> dict:
+def derivar_whatsapp(estado: EstadoCotizacion, reason: str) -> dict:
     """Prepara una derivacion por WhatsApp con resumen del caso."""
     # DERIVACION: crea la derivacion en CRM/ticketing y prepara el mensaje por WhatsApp Business API.
     summary = {

@@ -12,19 +12,12 @@ from app.guardrails.decision import (
     validar_override_intencion,
 )
 from app.estado import EstadoCotizacion
-
-
-EVENT_ALIASES = {
-    "matrimonio": ["matrimonio", "matriminio", "boda"],
-    "cumpleanos": ["cumpleanos", "cumple", "cumpleaños"],
-    "corporativo": ["corporativo", "empresa", "corporativa"],
-    "reunion": ["reunion", "reunión"],
-    "aniversario": ["aniversario"],
-    "lanzamiento": ["lanzamiento"],
-    "fin de ano": ["fin de ano", "fin de año"],
-}
-
-DISTRICTS = ["Miraflores", "San Isidro", "Surco", "Barranco", "La Molina", "San Borja", "Chosica"]
+from app.referencias_negocio import (
+    obtener_aliases_productos,
+    obtener_aliases_productos_no_soportados,
+    obtener_aliases_tipos_evento,
+    obtener_distritos_referencia,
+)
 
 MONTHS = {
     "enero": 1,
@@ -276,7 +269,7 @@ def _es_solo_saludo(texto: str) -> bool:
 # EXTRACCION REGLADA: obtiene tipo de evento desde patrones simples.
 def _extraer_tipo_evento(texto: str) -> str | None:
     """Normaliza el tipo de evento a una categoria soportada."""
-    for canonical, aliases in EVENT_ALIASES.items():
+    for canonical, aliases in obtener_aliases_tipos_evento().items():
         if any(alias in texto for alias in aliases):
             return canonical
     if "bebidas" in texto:
@@ -363,7 +356,7 @@ def _extraer_fecha_parcial(texto: str) -> dict[str, int | None] | None:
 def _extraer_distrito(message: str, esperando_distrito: bool = False) -> str | None:
     """Detecta distrito conocido o distrito libre declarado por el usuario."""
     lowered = message.lower()
-    for distrito in DISTRICTS:
+    for distrito in obtener_distritos_referencia():
         if distrito.lower() in lowered:
             return distrito
     return _extraer_distrito_libre(message, esperando_distrito=esperando_distrito)
@@ -399,7 +392,7 @@ def _extraer_distrito_libre(message: str, esperando_distrito: bool = False) -> s
 # VALIDACION DE DISTRITO: evita confundir meses, eventos o datos generales con nombres de distrito.
 def _normalizar_distrito_libre(value: str) -> str | None:
     """Limpia y valida un distrito libre antes de guardarlo en memoria temporal."""
-    partes = re.split(r"\b(?:para|con|mi nombre|mi numero|mi número|telefono|teléfono|correo)\b", value, flags=re.IGNORECASE)
+    partes = re.split(r"\b(?:para|con|mi nombre|mi numero|mi número|telefono|teléfono|celular)\b", value, flags=re.IGNORECASE)
     candidato = partes[-1] if len(partes) > 1 and " en " in value.lower() else partes[0]
     candidato = re.split(r"\b(?:el|para el)\s+\d{1,2}\b|\b\d{1,2}\s+de\b", candidato, maxsplit=1, flags=re.IGNORECASE)[0]
     candidato = re.sub(r"[^a-zA-ZáéíóúÁÉÍÓÚñÑ\s]", " ", candidato)
@@ -410,7 +403,7 @@ def _normalizar_distrito_libre(value: str) -> str | None:
     palabras = candidato_lower.split()
     if any(mes in candidato_lower for mes in MONTHS):
         return None
-    if any(alias in candidato_lower for aliases in EVENT_ALIASES.values() for alias in aliases):
+    if any(alias in candidato_lower for aliases in obtener_aliases_tipos_evento().values() for alias in aliases):
         return None
     if any(palabra in {"personas", "persona", "asistentes", "cotizacion", "cotización", "evento"} for palabra in palabras):
         return None
@@ -446,21 +439,16 @@ def _extraer_preferencias(texto: str) -> list[str]:
 # EXTRACCION REGLADA: obtiene productos/servicios solicitados para validar contra catalogo.
 def _extraer_productos_solicitados(texto: str) -> list[str]:
     """Extrae productos o servicios concretos solicitados por el usuario."""
-    product_aliases = {
-        "cerveza": ["cerveza", "cervezas"],
-        "vino": ["vino", "vinos"],
-        "ron": ["ron"],
-        "gaseosa": ["gaseosa", "gaseosas"],
-        "agua": ["agua", "aguas"],
-        "hielo": ["hielo"],
-        "bartenders": ["bartender", "bartenders"],
-        "bar movil": ["bar movil", "bar móvil", "barra movil", "barra móvil"],
-    }
-    requested = []
-    for canonical, aliases in product_aliases.items():
-        if any(alias in texto for alias in aliases):
-            requested.append(canonical)
-    return requested
+    encontrados: list[tuple[int, str]] = []
+    for canonical, aliases in obtener_aliases_productos().items():
+        posiciones = [texto.find(alias) for alias in aliases if alias in texto]
+        if posiciones:
+            encontrados.append((min(posiciones), canonical))
+    solicitados = []
+    for _, canonical in sorted(encontrados, key=lambda item: item[0]):
+        if canonical not in solicitados:
+            solicitados.append(canonical)
+    return solicitados
 
 
 # EXTRACCION/PRODUCTOS: expone la deteccion reglada para guardrails del workflow.
@@ -493,25 +481,77 @@ def _extraer_cambios_productos(texto: str) -> dict[str, list[str]]:
 # VALIDACION DE CATALOGO: separa productos mencionados que no existen en el catalogo.
 def _extraer_productos_no_soportados(texto: str, productos_solicitados: list[str]) -> list[str]:
     """Identifica productos pedidos que no existen en el catalogo."""
-    unsupported_aliases = {
-        "whisky": ["whisky", "whiskey"],
-        "pisco": ["pisco"],
-        "champagne": ["champagne", "espumante"],
-        "tequila": ["tequila"],
-        "vodka": ["vodka"],
-        "gin": ["gin", "ginebra"],
-        "jugo": ["jugo", "jugos"],
-        "snacks": ["snack", "snacks", "piqueos", "bocaditos"],
-        "torta": ["torta", "tortas", "pastel"],
-        "comida": ["comida", "catering", "buffet"],
-    }
-    unsupported = []
-    for canonical, aliases in unsupported_aliases.items():
+    encontrados: list[tuple[int, str]] = []
+    for canonical, aliases in obtener_aliases_productos_no_soportados().items():
         if canonical in productos_solicitados:
             continue
-        if any(alias in texto for alias in aliases):
-            unsupported.append(canonical)
-    return unsupported
+        posiciones = [texto.find(alias) for alias in aliases if alias in texto]
+        if posiciones:
+            encontrados.append((min(posiciones), canonical))
+    for candidato in _extraer_candidatos_producto_no_catalogado(texto, productos_solicitados):
+        posicion = texto.find(candidato)
+        encontrados.append((posicion if posicion >= 0 else len(texto), candidato))
+    no_soportados = []
+    for _, canonical in sorted(encontrados, key=lambda item: item[0]):
+        if canonical not in no_soportados:
+            no_soportados.append(canonical)
+    return no_soportados
+
+
+# EXTRACCION/PRODUCTOS: captura productos explicitamente pedidos aunque no existan en catalogo.
+def _extraer_candidatos_producto_no_catalogado(texto: str, productos_solicitados: list[str]) -> list[str]:
+    """Detecta candidatos pedidos despues de verbos como necesito/quiero/cotizar."""
+    patrones = [
+        r"\b(?:necesito|quiero|requiero|busco|cotizar|cotizacion de|cotización de)\s+(.+?)(?:\s+para\s+(?:un|una|el|\d)|\s+en\s+|\s+el\s+\d|$)",
+    ]
+    soportados = set(productos_solicitados)
+    aliases_soportados = {
+        alias
+        for aliases in obtener_aliases_productos().values()
+        for alias in aliases
+    }
+    aliases_eventos = {
+        alias
+        for aliases in obtener_aliases_tipos_evento().values()
+        for alias in aliases
+    }
+    aliases_no_soportados_conocidos = {
+        alias
+        for aliases in obtener_aliases_productos_no_soportados().values()
+        for alias in aliases
+    }
+    bloqueados = {
+        "organizar",
+        "cotizacion",
+        "cotización",
+        "evento",
+        "bebidas",
+        "producto",
+        "productos",
+        "servicio",
+        "servicios",
+    }
+    candidatos: list[str] = []
+    for patron in patrones:
+        for match in re.finditer(patron, texto, flags=re.IGNORECASE):
+            segmento = re.sub(r"\b(y|con|ademas|además)\b", ",", match.group(1), flags=re.IGNORECASE)
+            for parte in segmento.split(","):
+                candidato = re.sub(r"[^a-zA-ZáéíóúÁÉÍÓÚñÑ\s]", " ", parte)
+                candidato = re.sub(r"\s+", " ", candidato).strip().lower()
+                if not candidato or candidato in soportados or candidato in aliases_soportados:
+                    continue
+                if any(alias in candidato for alias in aliases_soportados):
+                    continue
+                if any(alias in candidato for alias in aliases_eventos):
+                    continue
+                if any(alias in candidato for alias in aliases_no_soportados_conocidos):
+                    continue
+                if candidato in MONTHS or candidato in bloqueados:
+                    continue
+                if any(palabra in bloqueados for palabra in candidato.split()):
+                    continue
+                candidatos.append(candidato)
+    return list(dict.fromkeys(candidatos))
 
 
 # EXTRACCION REGLADA: obtiene nombre del cotizante cuando el usuario lo declara.
@@ -551,12 +591,9 @@ def _extraer_nombre_cliente_contextual(message: str) -> str | None:
     return None
 
 
-# EXTRACCION REGLADA: obtiene telefono o correo usado para seguimiento y memoria.
+# EXTRACCION REGLADA: obtiene telefono celular usado para seguimiento y memoria.
 def _extraer_contacto(message: str) -> str | None:
-    """Extrae correo o telefono de contacto."""
-    email = re.search(r"[\w\.-]+@[\w\.-]+\.\w+", message)
-    if email:
-        return email.group(0)
+    """Extrae solo telefono celular de contacto."""
     phone = re.search(r"(?:\+?51\s*)?\d{9}", message.replace(" ", ""))
     if phone:
         return phone.group(0)
@@ -602,7 +639,7 @@ def _extraer_nombre_antes_frase_contacto(message: str) -> str | None:
     if not split:
         return None
     prefix = re.sub(r"[^A-Za-zÁÉÍÓÚÑáéíóúñ\s]", " ", split[0])
-    district_tokens = {token.lower() for distrito in DISTRICTS for token in distrito.split()}
+    district_tokens = {token.lower() for distrito in obtener_distritos_referencia() for token in distrito.split()}
     tokens = [
         token
         for token in prefix.split()

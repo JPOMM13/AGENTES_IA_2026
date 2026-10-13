@@ -673,7 +673,7 @@ def test_pide_telefono_para_buscar_datos_de_otra_sesion():
 
     assert estado.intencion == "retomar_previa"
     assert estado.campos_faltantes == ["contacto"]
-    assert "telefono o correo" in respuesta
+    assert "telefono celular" in respuesta
     assert "tipo de evento" not in respuesta
     assert "cantidad de asistentes" not in respuesta
 
@@ -686,7 +686,7 @@ def test_quiere_seguir_con_conversacion_anterior_pide_contacto():
 
     assert estado.intencion == "retomar_previa"
     assert estado.campos_faltantes == ["contacto"]
-    assert "telefono o correo" in respuesta
+    assert "telefono celular" in respuesta
     assert "tipo de evento" not in respuesta
     assert "cantidad de asistentes" not in respuesta
 
@@ -704,11 +704,11 @@ def test_retomar_conversacion_no_se_convierte_en_revision_pedido(monkeypatch):
 
     assert estado.intencion == "retomar_previa"
     assert estado.etapa == "memoria_previa"
-    assert "telefono o correo" in respuesta
+    assert "telefono celular" in respuesta
     assert "producto o servicio" not in respuesta
 
 
-# Prueba que datos anteriores y seguir conversacion pida telefono/correo.
+# Prueba que datos anteriores y seguir conversacion pida telefono celular.
 def test_datos_anteriores_y_seguir_conversacion_pide_contacto():
     estado = EstadoCotizacion()
 
@@ -717,7 +717,7 @@ def test_datos_anteriores_y_seguir_conversacion_pide_contacto():
     assert estado.intencion == "retomar_previa"
     assert estado.etapa == "memoria_previa"
     assert estado.campos_faltantes == ["contacto"]
-    assert "telefono o correo" in respuesta
+    assert "telefono celular" in respuesta
     assert "tipo de evento" not in respuesta
     assert "cantidad de asistentes" not in respuesta
 
@@ -731,7 +731,7 @@ def test_ya_tuve_session_contigo_pide_contacto():
     assert estado.intencion == "retomar_previa"
     assert estado.etapa == "memoria_previa"
     assert estado.campos_faltantes == ["contacto"]
-    assert "telefono o correo" in respuesta
+    assert "telefono celular" in respuesta
     assert "tipo de evento" not in respuesta
     assert "cantidad de asistentes" not in respuesta
 
@@ -745,7 +745,7 @@ def test_ya_tuvimos_session_y_di_todos_mis_datos_pide_contacto():
     assert estado.intencion == "retomar_previa"
     assert estado.etapa == "memoria_previa"
     assert estado.campos_faltantes == ["contacto"]
-    assert "telefono o correo" in respuesta
+    assert "telefono celular" in respuesta
     assert "cantidad de asistentes" not in respuesta
     assert "fecha y distrito" not in respuesta
 
@@ -759,7 +759,7 @@ def test_hola_datos_enteriormente_pide_contacto_para_memoria():
     assert estado.intencion == "retomar_previa"
     assert estado.etapa == "memoria_previa"
     assert estado.campos_faltantes == ["contacto"]
-    assert "telefono o correo" in respuesta
+    assert "telefono celular" in respuesta
     assert "tipo de evento" not in respuesta
     assert "cantidad de asistentes" not in respuesta
 
@@ -773,7 +773,7 @@ def test_ya_te_di_esos_datos_pide_contacto_para_memoria():
     assert estado.intencion == "retomar_previa"
     assert estado.etapa == "memoria_previa"
     assert estado.campos_faltantes == ["contacto"]
-    assert "telefono o correo" in respuesta
+    assert "telefono celular" in respuesta
     assert "tipo de evento" not in respuesta
     assert "cantidad de asistentes" not in respuesta
 
@@ -792,7 +792,7 @@ def test_guardrail_decision_preserva_recuperacion_memoria(monkeypatch):
     assert estado.intencion == "retomar_previa"
     assert estado.etapa == "memoria_previa"
     assert estado.campos_faltantes == ["contacto"]
-    assert "telefono o correo" in respuesta
+    assert "telefono celular" in respuesta
     assert "tipo de evento" not in respuesta
     assert "cantidad de asistentes" not in respuesta
 
@@ -811,7 +811,7 @@ def test_fallback_si_llm_decisor_falla_en_recuperacion_memoria(monkeypatch):
     assert estado.intencion == "retomar_previa"
     assert estado.etapa == "memoria_previa"
     assert estado.campos_faltantes == ["contacto"]
-    assert "telefono o correo" in respuesta
+    assert "telefono celular" in respuesta
     assert "cantidad de asistentes" not in respuesta
 
 
@@ -867,7 +867,7 @@ def test_contacto_despues_de_retomar_busca_memoria_y_si_no_existe_inicia_nueva(m
 
     respuesta, estado = manejar_mensaje("tuve una sesion anterior donde te di ya mis datos", estado)
     assert estado.intencion == "retomar_previa"
-    assert "telefono o correo" in respuesta
+    assert "telefono celular" in respuesta
 
     respuesta, estado = manejar_mensaje("989515182", estado)
 

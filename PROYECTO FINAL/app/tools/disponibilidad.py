@@ -13,7 +13,7 @@ from app.repositorios_postgres.disponibilidad_postgres import (
 
 
 # TOOL DISPONIBILIDAD: valida cupos de paquetes/servicios para la fecha solicitada.
-def mock_validar_disponibilidad(estado: EstadoCotizacion, options: list[dict]) -> dict:
+def validar_disponibilidad(estado: EstadoCotizacion, options: list[dict]) -> dict:
     """Valida disponibilidad de paquetes para la fecha solicitada."""
     # DISPONIBILIDAD: consulta cupos por fecha en calendario o tabla transaccional.
     available_options = []
@@ -43,7 +43,7 @@ def mock_validar_disponibilidad(estado: EstadoCotizacion, options: list[dict]) -
 
 
 # TOOL STOCK: valida inventario por producto y propone alternativas por categoria.
-def mock_validar_stock_productos(estado: EstadoCotizacion, requested_items: list[dict], products: list[dict]) -> dict:
+def validar_stock_productos(estado: EstadoCotizacion, requested_items: list[dict], products: list[dict]) -> dict:
     """Valida stock por producto y calcula faltantes con alternativas."""
     # STOCK: consulta inventario por producto y fecha.
     if not estado.fecha_evento:

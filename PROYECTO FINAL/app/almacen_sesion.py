@@ -53,7 +53,7 @@ def hidratar_estado(destino: EstadoCotizacion, origen: EstadoCotizacion) -> Esta
 
 # MEMORIA PERSISTENTE MOCK: normaliza el contacto usado como clave de busqueda.
 def _clave_contacto(contacto: str) -> str:
-    """Normaliza telefono o correo para identificar al cliente."""
+    """Normaliza telefono celular para identificar al cliente."""
     return re.sub(r"\D+", "", contacto.lower()) or contacto.strip().lower()
 
 

@@ -10,7 +10,7 @@ RAG_CHAT_MODEL = "gpt-4o-mini"
 
 
 # TOOL RAG: busca politicas o contexto de negocio en una base de conocimiento local.
-def mock_buscar_rag(query: str) -> dict:
+def buscar_rag(query: str) -> dict:
     """Busca respuestas de politicas en la base de conocimiento local."""
     # RAG: consulta documentos, embeddings y retriever semantico.
     if usar_postgres_negocio():

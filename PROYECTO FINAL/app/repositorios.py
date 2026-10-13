@@ -75,7 +75,7 @@ class RepositorioMemoriaCotizacion:
 
     # REPOSITORIO: busca memoria persistente usando contacto como identificador.
     def buscar_por_contacto(self, contacto: str | None) -> EstadoCotizacion | None:
-        """Busca una cotizacion previa por telefono o correo."""
+        """Busca una cotizacion previa por telefono celular."""
         if usar_postgres_para_memoria():
             return buscar_conversacion_previa_postgres(contacto)
         return almacen_sesion.buscar_conversacion_previa(None, contacto)

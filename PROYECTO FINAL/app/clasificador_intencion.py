@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 
 from app.configuracion_llm import obtener_configuracion_llm
 from app.estado import EstadoCotizacion
+from app.modelo_agentico import construir_modelo_chat_agentico
 from app.prompts_agenticos import PROMPT_SISTEMA_CLASIFICADOR_INTENCION
 
 
@@ -86,8 +87,6 @@ def debe_usar_clasificador_intencion() -> bool:
 @lru_cache(maxsize=1)
 def obtener_clasificador_intencion():
     """Crea el LLM con salida estructurada para clasificar intenciones."""
-    from langchain.chat_models import init_chat_model
-
     config = obtener_configuracion_llm()
-    modelo = init_chat_model(config.modelo_langchain, temperature=0)
+    modelo = construir_modelo_chat_agentico(config)
     return modelo.with_structured_output(ResultadoClasificacionIntencion)

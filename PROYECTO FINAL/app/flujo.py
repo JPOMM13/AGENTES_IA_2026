@@ -9,16 +9,15 @@ from app.artefactos import generar_artefacto_visual_cotizacion
 from app.guardrails.decision import validar_decision_agentica
 from app.llm import pulir_respuesta
 from app.repositorios import RepositorioSesionActiva, RepositorioMemoriaCotizacion
-from app.tools.disponibilidad import mock_validar_disponibilidad, mock_validar_stock_productos
-from app.tools.catalogo import mock_buscar_catalogo
-from app.tools.calendario import mock_registrar_evento_cotizado, mock_validar_calendario_eventos
-from app.tools.cobertura import mock_validar_cobertura
-from app.tools.dimensionamiento import mock_dimensionar_evento
+from app.tools.disponibilidad import validar_disponibilidad, validar_stock_productos
+from app.tools.catalogo import buscar_catalogo
+from app.tools.calendario import registrar_evento_cotizado, validar_calendario_eventos
+from app.tools.cobertura import validar_cobertura
+from app.tools.dimensionamiento import dimensionar_evento
 from app.tools.extraccion import extraer_intencion_y_campos, extraer_productos_mencionados
-from app.tools.derivacion import mock_derivar_whatsapp
-from app.tools.precios import mock_comparar_opciones, mock_generar_cotizacion
+from app.tools.derivacion import derivar_whatsapp
+from app.tools.precios import comparar_opciones, generar_cotizacion
 from app.tools.consulta_rag import buscar_rag
-# from app.tools.consulta_rag import mock_buscar_rag
 
 
 REQUIRED_FIELDS = ["tipo_evento", "asistentes", "fecha_evento", "distrito", "nombre_cliente", "contacto", "productos_solicitados"]
@@ -115,7 +114,7 @@ def ejecutar_decision_negocio(mensaje_usuario: str, estado: EstadoCotizacion) ->
 
     if estado.intencion == "derivacion_humana":
         estado.derivacion_confirmada = True
-        handoff = mock_derivar_whatsapp(estado, reason="Solicitud explicita del usuario.")
+        handoff = derivar_whatsapp(estado, reason="Solicitud explicita del usuario.")
         estado.resumen_derivacion = handoff
         respuesta = renderizar_respuesta_derivacion(handoff)
         return respuesta, estado, "derivacion"
@@ -132,14 +131,14 @@ def ejecutar_decision_negocio(mensaje_usuario: str, estado: EstadoCotizacion) ->
 
     if estado.intencion == "confirmacion_derivacion" and estado.derivacion_ofrecida:
         estado.derivacion_confirmada = True
-        handoff = mock_derivar_whatsapp(estado, reason="Usuario acepta derivacion por WhatsApp.")
+        handoff = derivar_whatsapp(estado, reason="Usuario acepta derivacion por WhatsApp.")
         estado.resumen_derivacion = handoff
         respuesta = renderizar_respuesta_derivacion(handoff)
         return respuesta, estado, "derivacion"
 
     estado.registrar_log("encontrar_campos_faltantes", {"campos_faltantes": estado.campos_faltantes})
     if estado.distrito and "distrito" not in estado.campos_faltantes and estado.cobertura_ok is not True:
-        coverage = mock_validar_cobertura(estado)
+        coverage = validar_cobertura(estado)
         estado.cobertura_ok = coverage["ok"]
         estado.registrar_log("validar_cobertura_temprana", coverage)
         if not coverage["ok"]:
@@ -154,40 +153,40 @@ def ejecutar_decision_negocio(mensaje_usuario: str, estado: EstadoCotizacion) ->
         respuesta = renderizar_respuesta_productos_no_soportados(estado)
         return respuesta, estado, "alternativas_producto"
 
-    coverage = mock_validar_cobertura(estado)
+    coverage = validar_cobertura(estado)
     estado.cobertura_ok = coverage["ok"]
     estado.registrar_log("validar_cobertura", coverage)
     if not coverage["ok"]:
         respuesta = renderizar_respuesta_sin_cobertura(estado, coverage)
         return respuesta, estado, "sin_cobertura"
 
-    calendario = mock_validar_calendario_eventos(estado)
+    calendario = validar_calendario_eventos(estado)
     estado.calendario_ok = calendario["ok"]
     estado.registrar_log("validar_calendario_eventos", calendario)
     if not calendario["ok"]:
         respuesta = renderizar_respuesta_fecha_ocupada(estado, calendario)
         return respuesta, estado, "fecha_ocupada"
 
-    catalog_result = mock_buscar_catalogo(estado)
+    catalog_result = buscar_catalogo(estado)
     estado.opciones_catalogo = catalog_result["options"]
     estado.registrar_log("catalogo_productos", {"products": catalog_result["products"]})
     estado.registrar_log("buscar_catalogo", catalog_result)
 
-    availability = mock_validar_disponibilidad(estado, estado.opciones_catalogo)
+    availability = validar_disponibilidad(estado, estado.opciones_catalogo)
     estado.opciones_validas = availability["available_options"]
     estado.opciones_descartadas = availability["opciones_descartadas"]
     estado.disponibilidad_ok = bool(estado.opciones_validas)
     estado.registrar_log("validar_disponibilidad", availability)
-    estado.dimensionamiento = mock_dimensionar_evento(estado)
+    estado.dimensionamiento = dimensionar_evento(estado)
     estado.registrar_log("dimensionar_evento", estado.dimensionamiento)
 
     if estado.opciones_validas:
-        comparison = mock_comparar_opciones(estado)
+        comparison = comparar_opciones(estado)
         estado.opcion_recomendada = comparison["recommended"]
         estado.opcion_recomendada["origen"] = "package"
         estado.registrar_log("comparar_opciones", comparison)
     else:
-        stock_result = mock_validar_stock_productos(estado, estado.dimensionamiento["items"], catalog_result["all_products"])
+        stock_result = validar_stock_productos(estado, estado.dimensionamiento["items"], catalog_result["all_products"])
         estado.registrar_log("validar_stock_productos", stock_result)
         if stock_result["missing_items"]:
             estado.disponibilidad_ok = False
@@ -202,9 +201,9 @@ def ejecutar_decision_negocio(mensaje_usuario: str, estado: EstadoCotizacion) ->
         estado.registrar_log("construir_opcion_basada_en_productos", estado.opcion_recomendada)
 
     if estado.intencion == "cotizacion" or _parece_confirmacion_cotizacion(mensaje_usuario):
-        estado.cotizacion = mock_generar_cotizacion(estado)
+        estado.cotizacion = generar_cotizacion(estado)
         estado.registrar_log("generar_cotizacion", estado.cotizacion)
-        reserva_evento = mock_registrar_evento_cotizado(estado)
+        reserva_evento = registrar_evento_cotizado(estado)
         estado.registrar_log("registrar_evento_cotizado", reserva_evento)
         estado.imagen_artefacto_cotizacion = generar_artefacto_visual_cotizacion(estado)
         estado.registrar_log("generar_artefacto_visual_cotizacion", {"path": estado.imagen_artefacto_cotizacion})
@@ -341,7 +340,7 @@ def detectar_conversacion_previa_por_contacto(estado: EstadoCotizacion) -> str |
     """Busca automaticamente memoria previa cuando aparece un contacto."""
     if not estado.contacto or estado.estado_previo_pendiente or estado.intencion == "retomar_previa":
         return None
-    # MEMORIA PERSISTENTE: consulta por telefono/correo para saber si existe una cotizacion previa.
+    # MEMORIA PERSISTENTE: consulta por telefono para saber si existe una cotizacion previa.
     previo = QUOTE_MEMORY.buscar_por_contacto(estado.contacto)
     if not previo or previo.id_sesion == estado.id_sesion:
         return None
@@ -397,7 +396,7 @@ def manejar_eleccion_previa_pendiente(mensaje_usuario: str, estado: EstadoCotiza
     return respuesta, estado
 
 
-# GUARDRAIL DE MEMORIA: si cambia el telefono/correo, se descarta la previa pendiente y se busca con el nuevo identificador.
+# GUARDRAIL DE MEMORIA: si cambia el telefono, se descarta la previa pendiente y se busca con el nuevo identificador.
 def contacto_actual_cambio_frente_a_previo_pendiente(estado: EstadoCotizacion) -> bool:
     """Evita retener una cotizacion previa cuando el usuario entrega otro contacto."""
     if not estado.contacto or not estado.estado_previo_pendiente:
@@ -503,7 +502,7 @@ def pedir_campos_faltantes(campos_faltantes: list[str]) -> str:
         "fecha_evento": "fecha",
         "distrito": "distrito",
         "nombre_cliente": "nombre de la persona que cotiza",
-        "contacto": "telefono o correo para seguimiento",
+        "contacto": "telefono celular para seguimiento",
         "productos_solicitados": "productos o servicios a cotizar, por ejemplo cerveza, vino, gaseosas, hielo, bartender o bar movil",
     }
     next_fields = priorizar_campos_faltantes(campos_faltantes)
@@ -548,7 +547,7 @@ def pedir_campos_faltantes_para_estado(estado: EstadoCotizacion) -> str:
 # TOOL CATALOGO: lista productos y servicios disponibles para que el usuario elija.
 def pedir_productos_con_catalogo(estado: EstadoCotizacion) -> str:
     """Muestra opciones de catalogo cuando faltan productos/servicios."""
-    catalog_result = mock_buscar_catalogo(estado)
+    catalog_result = buscar_catalogo(estado)
     estado.registrar_log(
         "catalog_options_for_product_selection",
         {
@@ -958,7 +957,7 @@ def manejar_retomar_previa(estado: EstadoCotizacion) -> tuple[str, EstadoCotizac
         estado.campos_faltantes = ["contacto"]
         return (
             "Claro, puedo intentar buscar lo que quedo guardado de una cotizacion anterior. "
-            "Para ubicarla, dime por favor el telefono o correo que usaste en esa conversacion.",
+            "Para ubicarla, dime por favor el telefono celular que usaste en esa conversacion.",
             estado,
         )
 
@@ -1110,7 +1109,7 @@ def renderizar_respuesta_rag(query: str) -> str:
     return buscar_rag(query)
 
     # RAG LOCAL (desactivado):
-    # resultado = mock_buscar_rag(query)
+    # resultado = buscar_rag(query)
     # if not resultado["matches"]:
     #     return "No encontre una politica relacionada. Solo tengo anticipacion, feriados y descuentos."
     # lines = [f"- **{doc['title']}**: {doc['texto']}" for doc in resultado["matches"]]
@@ -1166,7 +1165,7 @@ def renderizar_memoria_temporal(estado: EstadoCotizacion) -> str:
 
     captured_text = "; ".join(captured) if captured else "sin datos capturados todavia"
     if estado.intencion == "retomar_previa" and not estado.contacto:
-        return f"_Tengo en memoria: {captured_text}. Siguiente por confirmar: telefono o correo para buscar la cotizacion anterior._"
+        return f"_Tengo en memoria: {captured_text}. Siguiente por confirmar: telefono celular para buscar la cotizacion anterior._"
     missing = encontrar_campos_faltantes(estado)
     if missing:
         next_missing = priorizar_campos_faltantes(missing)
@@ -1218,7 +1217,7 @@ def _etiquetas_campos_faltantes(campos_faltantes: list[str]) -> list[str]:
         "fecha_evento": "fecha",
         "distrito": "distrito",
         "nombre_cliente": "nombre de la persona que cotiza",
-        "contacto": "telefono o correo para seguimiento",
+        "contacto": "telefono celular para seguimiento",
         "productos_solicitados": "productos o servicios a cotizar",
     }
     return [labels[field] for field in campos_faltantes]

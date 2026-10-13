@@ -25,7 +25,7 @@ def obtener_schema_memoria() -> str:
     return schema or "memory"
 
 
-# MEMORIA PERSISTENTE POSTGRES: normaliza telefono o correo para busquedas consistentes.
+# MEMORIA PERSISTENTE POSTGRES: normaliza telefono celular para busquedas consistentes.
 def normalizar_contacto(contacto: str) -> str:
     """Normaliza el contacto usado como identidad principal del cliente."""
     return re.sub(r"\D+", "", contacto.lower()) or contacto.strip().lower()
@@ -80,7 +80,7 @@ def guardar_estado_conversacion_postgres(estado: EstadoCotizacion) -> None:
         conexion.commit()
 
 
-# MEMORIA PERSISTENTE POSTGRES: busca una cotizacion previa por telefono o correo.
+# MEMORIA PERSISTENTE POSTGRES: busca una cotizacion previa por telefono celular.
 def buscar_conversacion_previa_postgres(contacto: str | None) -> EstadoCotizacion | None:
     """Recupera una memoria previa desde PostgreSQL JSONB usando el contacto."""
     if not contacto:

@@ -7,7 +7,7 @@ from app.repositorios_postgres.cobertura_postgres import validar_cobertura_postg
 
 
 # TOOL COBERTURA: valida si el distrito esta dentro de la cobertura operativa.
-def mock_validar_cobertura(estado: EstadoCotizacion) -> dict:
+def validar_cobertura(estado: EstadoCotizacion) -> dict:
     """Confirma si el distrito esta dentro de la cobertura."""
     # COBERTURA: consulta cobertura operativa por zonas, distritos y capacidad logistica.
     if usar_postgres_negocio():

@@ -6,7 +6,7 @@ from app.estado import EstadoCotizacion
 
 
 # TOOL DIMENSIONAMIENTO: calcula cantidades sugeridas por producto segun asistentes y evento.
-def mock_dimensionar_evento(estado: EstadoCotizacion) -> dict:
+def dimensionar_evento(estado: EstadoCotizacion) -> dict:
     """Calcula cantidades referenciales segun asistentes y productos elegidos."""
     # DIMENSIONAMIENTO: aplica reglas comerciales o un motor versionado para calcular cantidades.
     asistentes = estado.asistentes or 0

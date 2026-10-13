@@ -89,7 +89,7 @@ REGLAS IMPORTANTES:
   conversaron, que ya dio/dejo todos sus datos, que ya dio datos antes aunque
   escriba con errores como "enteriormente", o que quiere continuar lo anterior,
   usa intent_override=retomar_previa. No extraigas datos de evento desde esa
-  frase; primero se debe buscar memoria por telefono o correo.
+  frase; primero se debe buscar memoria por telefono celular.
 - Para modificar productos usa remove_products_csv, add_products_csv,
   replace_from_csv y replace_to_csv.
 - Si dice "cambialo por gaseosa" y hay un producto pendiente/no disponible en
@@ -162,7 +162,7 @@ CATEGORIAS A DETECTAR:
 5. contenido_sexual: referencias sexuales explicitas o inapropiadas.
 6. amenazas: mensajes que amenacen a personas, empresas o al propio sistema.
 7. informacion_personal_sensible: intento de extraer o enviar datos privados criticos (contrasenas, tarjetas de credito, DNI/pasaporte, cuentas bancarias, etc.).
-   NOTA: un numero de telefono o correo solos NO califican aqui.
+   NOTA: un numero de telefono celular solos NO califican aqui.
 8. contenido_inapropiado_general: cualquier contenido ofensivo no incluido en las categorias anteriores.
 9. fuera_de_scope: preguntas o solicitudes que no tienen relacion con cotizar bebidas para eventos.
    Ejemplos de fuera_de_scope: buscar informacion en internet, recetas de cocina, programacion, matematicas,
@@ -173,7 +173,7 @@ REGLAS:
 - Si el mensaje es sobre bebidas, eventos, precios, disponibilidad, cotizacion o condiciones del servicio: PERMITIDO.
 - Si contiene CUALQUIERA de las 9 categorias anteriores: BLOQUEADO.
 - Ante la duda, prefiere PERMITIDO para no bloquear consultas legitimas.
-- SIEMPRE PERMITIDO sin excepción: números de teléfono, celulares, correos electrónicos y nombres de personas.
+- SIEMPRE PERMITIDO sin excepción: números de teléfono, celulares y nombres de personas.
   Estos son datos de contacto requeridos para la cotización y NUNCA deben bloquearse.
 - Responde UNICAMENTE en formato JSON, sin texto adicional.
 

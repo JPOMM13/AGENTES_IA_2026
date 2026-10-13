@@ -14,6 +14,7 @@ from app.guardrails.decision import (
 from app.guardrails.capa_intermedia import invocar_agente_con_guardrails, obtener_middleware_langchain_guardrails
 from app.configuracion_llm import obtener_configuracion_llm
 from app.estado import EstadoCotizacion
+from app.modelo_agentico import construir_modelo_chat_agentico, debe_usar_retorno_directo_agentico
 from app.prompts_agenticos import PROMPT_SISTEMA_DECISOR
 
 
@@ -54,7 +55,7 @@ def decidir_siguiente_accion_con_agente(mensaje_usuario: str, estado: EstadoCoti
                 "messages": [
                     {
                         "role": "user",
-        "content": json.dumps(
+                        "content": json.dumps(
                             {
                                 "mensaje_usuario": mensaje_usuario,
                                 "estado": estado.a_diccionario_panel(),
@@ -93,7 +94,7 @@ def crear_agente_decisor():
     from langchain.tools import tool
 
     # TOOL DEL AGENTE DECISOR: devuelve una accion permitida segun prerequisitos, evitando que el LLM salte validaciones.
-    @tool
+    @tool(return_direct=debe_usar_retorno_directo_agentico())
     def elegir_accion_workflow(
         mensaje_usuario: str,
         tiene_campos_faltantes: bool,
@@ -139,9 +140,10 @@ def crear_agente_decisor():
         return "validar_y_recomendar" if puede_validar_y_recomendar else "pedir_campos_faltantes"
 
     config = obtener_configuracion_llm()
+    modelo = construir_modelo_chat_agentico(config)
     # CREATE_AGENT / LLM: une modelo configurado, system prompt centralizado, tool y middleware guardrail.
     agente = create_agent(
-        model=config.modelo_langchain,
+        model=modelo,
         tools=[elegir_accion_workflow],
         system_prompt=PROMPT_SISTEMA_DECISOR,
         middleware=obtener_middleware_langchain_guardrails(),
