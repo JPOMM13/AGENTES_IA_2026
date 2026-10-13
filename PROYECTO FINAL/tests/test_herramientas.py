@@ -183,6 +183,15 @@ def test_referencias_de_productos_por_categoria():
     nombres = [r.name for r in imagenes_referencia_productos(estado)]
     assert nombres[0] == "bar_movil.png" and "cerveza.png" in nombres and "hielo.png" in nombres and "agua.png" in nombres
 
+    # Un paquete cotizado como una sola linea ("1 paquete x Pack celebracion esencial") se representa por lo que
+    # incluye (cervezas, gaseosas, hielo) y por lo que el cliente pidio, no solo por el bar.
+    estado2 = EstadoCotizacion(tipo_evento="cumpleanos", asistentes=40)
+    estado2.opcion_recomendada = {"id": "PKG-BASIC-50", "name": "Pack celebracion esencial", "includes": ["cervezas", "gaseosas", "hielo"]}
+    estado2.cotizacion = {"quote_id": "COT-Y", "total": 950.0, "details": [{"concept": "Pack celebracion esencial"}]}
+    estado2.productos_solicitados = ["ron"]
+    nombres2 = [r.name for r in imagenes_referencia_productos(estado2)]
+    assert nombres2 == ["bar_movil.png", "cerveza.png", "gaseosa.png", "hielo.png", "ron.png"]
+
 
 def test_composicion_sobre_foto_usa_el_proveedor_y_degrada_si_falla(tmp_path, monkeypatch):
     import base64, types

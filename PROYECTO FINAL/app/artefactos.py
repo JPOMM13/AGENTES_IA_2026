@@ -54,7 +54,12 @@ def imagenes_referencia_productos(estado: Any) -> list[Path]:
     opcion = estado.opcion_recomendada or {}
     if opcion.get("id", "").startswith("PKG") or "bar" in str(opcion.get("name", "")).lower():
         nombres.append("bar_movil")
-    for producto in nombres_productos_cotizacion(estado):
+    # Candidatos: el detalle de la cotizacion, lo que el paquete "incluye" (cervezas, gaseosas, hielo...) y lo que el
+    # cliente pidio con sus palabras. Asi el paquete no queda representado solo por el bar.
+    candidatos = list(nombres_productos_cotizacion(estado))
+    candidatos += [str(x) for x in (opcion.get("includes") or [])]
+    candidatos += [str(x) for x in (getattr(estado, "productos_solicitados", None) or [])]
+    for producto in candidatos:
         clave = normalizar_nombre_producto(producto)
         for categoria in ("cerveza", "vino", "ron", "gaseosa", "agua", "hielo", "bartenders"):
             if categoria.rstrip("s") in clave and categoria not in nombres:
