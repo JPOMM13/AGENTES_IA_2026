@@ -1023,3 +1023,23 @@ def test_sesion_activa_se_guarda_por_session_id(monkeypatch, tmp_path):
 
     redis_session_store.reiniciar_sesion_activa(another_state.id_sesion)
     assert redis_session_store.cargar_sesion_activa(another_state.id_sesion) is None
+
+
+# HANDOFF: el mensaje que recibe el asesor es legible y trae contacto, cotizacion y total (antes era el repr de un dict).
+def test_mensaje_al_asesor_es_legible_y_trae_cotizacion(monkeypatch):
+    from urllib.parse import unquote
+
+    monkeypatch.setenv("WHATSAPP_ASESOR", "51911222333")
+    monkeypatch.delenv("DERIVACION_WEBHOOK_URL", raising=False)
+    estado = EstadoCotizacion()
+    for mensaje in [
+        "Soy Juan Perez, mi telefono es 999888777. Necesito bar movil premium para un matrimonio de 100 personas el 25 de noviembre en Miraflores",
+        "genera la cotizacion",
+    ]:
+        respuesta, estado = manejar_mensaje(mensaje, estado)
+    ticket = estado.resumen_derivacion
+    assert ticket["url"].startswith("https://wa.me/51911222333?text=") and "{" not in unquote(ticket["url"])
+    texto = ticket["summary"]["mensaje"]
+    assert "Juan Perez" in texto and "999888777" in texto and "COT-" in texto and "3304" in texto and "pago" in texto
+    assert ticket["handoff_id"].startswith("DER-") and ticket["notificado"] is False
+    assert "https://wa.me/51911222333" in respuesta
