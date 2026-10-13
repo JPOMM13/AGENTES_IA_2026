@@ -196,9 +196,12 @@ LLM_ENABLED=true
 LLM_PROVIDER=openai
 LLM_MODEL=gpt-4o-mini
 LLM_API_KEY=...
+AGENTE_RETURN_DIRECT=true
+GUARDRAIL_LLM_RECURSION_LIMIT=6
 ```
 
 La misma configuracion se usa para extraccion, decision agentica y redaccion final.
+`AGENTE_RETURN_DIRECT=true` evita vueltas extra de los agentes `create_agent` despues de ejecutar sus tools internas.
 
 Imagen multimodal del evento:
 

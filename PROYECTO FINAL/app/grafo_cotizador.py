@@ -93,7 +93,7 @@ def obtener_grafo_cotizador():
     grafo.add_node("extraer_y_enrutar_intencion", extraer_y_enrutar_intencion)
 
     # NODO gestionar_memoria_persistente:
-    # - Que hace: busca cotizaciones anteriores por telefono/correo y resuelve si retomar o seguir con la actual.
+    # - Que hace: busca cotizaciones anteriores por telefono y resuelve si retomar o seguir con la actual.
     # - LLM/system prompt: no usa LLM actualmente; la eleccion previa pendiente se valida por codigo.
     # - Tools: no usa tools agenticas.
     # - BD: con MEMORY_DATA_SOURCE=postgres consulta PostgreSQL NoSQL memory en memory.jpomm_memoria_cotizaciones.

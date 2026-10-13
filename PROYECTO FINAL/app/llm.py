@@ -168,7 +168,7 @@ def es_respuesta_pulida_segura(respuesta_base: str, polished: str, estado: Estad
         (estado.fecha_evento, ["fecha", "cuándo", "cuando"]),
         (estado.distrito, ["distrito", "ubicación", "ubicacion", "dónde", "donde"]),
         (estado.nombre_cliente, ["nombre"]),
-        (estado.contacto, ["contacto", "teléfono", "telefono", "correo"]),
+        (estado.contacto, ["contacto", "teléfono", "telefono", "celular"]),
     ]
     for value, phrases in forbidden_known_field_questions:
         if value and any(phrase in texto for phrase in phrases) and not any(phrase in raw for phrase in phrases):

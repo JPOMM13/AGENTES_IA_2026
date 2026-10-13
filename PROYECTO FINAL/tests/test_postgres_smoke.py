@@ -3,10 +3,10 @@ import os
 import pytest
 
 from app.estado import EstadoCotizacion
-from app.tools.calendario import mock_registrar_evento_cotizado, mock_validar_calendario_eventos
-from app.tools.catalogo import mock_buscar_catalogo
-from app.tools.cobertura import mock_validar_cobertura
-from app.tools.disponibilidad import mock_validar_stock_productos
+from app.tools.calendario import registrar_evento_cotizado, validar_calendario_eventos
+from app.tools.catalogo import buscar_catalogo
+from app.tools.cobertura import validar_cobertura
+from app.tools.disponibilidad import validar_stock_productos
 
 
 pytestmark = pytest.mark.skipif(
@@ -21,7 +21,7 @@ def test_postgres_catalogo(monkeypatch):
     monkeypatch.setenv("BUSINESS_DATA_SOURCE", "postgres")
     estado = EstadoCotizacion(tipo_evento="matrimonio", asistentes=100, productos_solicitados=["bar movil"])
 
-    resultado = mock_buscar_catalogo(estado)
+    resultado = buscar_catalogo(estado)
 
     assert any(opcion["id"] == "PKG-BAR-100" for opcion in resultado["options"])
     assert any(producto["category"] == "vino" for producto in resultado["all_products"])
@@ -33,7 +33,7 @@ def test_postgres_cobertura(monkeypatch):
     monkeypatch.setenv("BUSINESS_DATA_SOURCE", "postgres")
     estado = EstadoCotizacion(distrito="Miraflores")
 
-    resultado = mock_validar_cobertura(estado)
+    resultado = validar_cobertura(estado)
 
     assert resultado["ok"] is True
 
@@ -43,9 +43,9 @@ def test_postgres_stock(monkeypatch):
     """Consulta stock de productos y alternativas desde PostgreSQL."""
     monkeypatch.setenv("BUSINESS_DATA_SOURCE", "postgres")
     estado = EstadoCotizacion(fecha_evento="2026-11-15", tipo_evento="matrimonio")
-    catalogo = mock_buscar_catalogo(estado)
+    catalogo = buscar_catalogo(estado)
 
-    resultado = mock_validar_stock_productos(
+    resultado = validar_stock_productos(
         estado,
         [{"concept": "vino", "quantity": 35, "unit": "botellas"}],
         catalogo["all_products"],
@@ -69,7 +69,7 @@ def test_postgres_calendario_bloquea_cruce(monkeypatch):
         cotizacion={"quote_id": "Q-SMOKE-POSTGRES"},
     )
 
-    mock_registrar_evento_cotizado(estado)
-    resultado = mock_validar_calendario_eventos(estado)
+    registrar_evento_cotizado(estado)
+    resultado = validar_calendario_eventos(estado)
 
     assert resultado["ok"] is False

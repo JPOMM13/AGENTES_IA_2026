@@ -9,6 +9,7 @@ from app.decisor_agentico import debe_usar_create_agent
 from app.guardrails.capa_intermedia import invocar_agente_con_guardrails, obtener_middleware_langchain_guardrails
 from app.configuracion_llm import obtener_configuracion_llm
 from app.estado import EstadoCotizacion
+from app.modelo_agentico import construir_modelo_chat_agentico, debe_usar_retorno_directo_agentico
 from app.prompts_agenticos import PROMPT_SISTEMA_EXTRACTOR
 
 
@@ -61,7 +62,7 @@ def crear_agente_extractor():
     from langchain.tools import tool
 
     # TOOL DEL AGENTE EXTRACTOR: registra campos estructurados para que el workflow los valide despues.
-    @tool
+    @tool(return_direct=debe_usar_retorno_directo_agentico())
     def registrar_campos_extraidos(
         tipo_evento: str = "",
         asistentes: str = "",
@@ -104,9 +105,10 @@ def crear_agente_extractor():
         )
 
     config = obtener_configuracion_llm()
+    modelo = construir_modelo_chat_agentico(config)
     # CREATE_AGENT / LLM: une modelo configurado, system prompt centralizado, tool y middleware guardrail.
     agente = create_agent(
-        model=config.modelo_langchain,
+        model=modelo,
         tools=[registrar_campos_extraidos],
         system_prompt=PROMPT_SISTEMA_EXTRACTOR,
         middleware=obtener_middleware_langchain_guardrails(),

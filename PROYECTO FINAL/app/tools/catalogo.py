@@ -7,7 +7,7 @@ from app.repositorios_postgres.catalogo_postgres import buscar_catalogo_postgres
 
 
 # TOOL CATALOGO: consulta paquetes, productos y servicios disponibles para cotizar.
-def mock_buscar_catalogo(estado: EstadoCotizacion) -> dict:
+def buscar_catalogo(estado: EstadoCotizacion) -> dict:
     """Filtra paquetes y productos segun evento, capacidad y pedido."""
     # CATALOGO: consulta el catalogo comercial de productos, servicios y paquetes.
     if usar_postgres_negocio():

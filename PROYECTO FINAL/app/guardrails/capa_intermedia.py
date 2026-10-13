@@ -7,6 +7,12 @@ from langchain.agents.middleware import PIIMiddleware
 from app.guardrails.entrada import validar_mensaje_entrada
 from app.guardrails.salida import validar_salida_agente
 from app.estado import EstadoCotizacion
+from app.modelo_agentico import construir_config_invocacion_agentica
+
+try:
+    from langgraph.errors import GraphRecursionError
+except ImportError:  # pragma: no cover - compatibilidad con versiones sin esta excepcion publica.
+    GraphRecursionError = None  # type: ignore[assignment]
 
 
 # RESUMEN: ESTE MODULO FUNCIONA COMO MIDDLEWARE ENTRE EL WORKFLOW Y CREATE_AGENT.
@@ -21,8 +27,7 @@ def obtener_middleware_langchain_guardrails() -> list:
     Devuelve middlewares nativos para pasarlos directamente a create_agent.
 
     DECISION DE DISENO:
-    - Correo electronico (email): PERMITIDO — es un dato de contacto requerido para la cotizacion.
-    - Telefono: PERMITIDO — es un dato de contacto requerido para la cotizacion.
+    - Telefono: PERMITIDO — es el dato de contacto requerido para la cotizacion.
     - Nombre del cliente: PERMITIDO — requerido para personalizar la cotizacion.
     - Tarjetas de credito: ENMASCARADO — no son necesarias para cotizar; protegemos al usuario.
     - API keys: BLOQUEADO — nunca deben circular por el workflow del agente.
@@ -64,8 +69,14 @@ def invocar_agente_con_guardrails(
         return None
 
     try:
-        resultado = agente.invoke(carga_agente)
+        resultado = agente.invoke(carga_agente, config=construir_config_invocacion_agentica())
     except Exception as exc:
+        if GraphRecursionError is not None and isinstance(exc, GraphRecursionError):
+            estado.registrar_log(
+                "agente_recursion_error",
+                {"agente": nombre_agente, "error": str(exc)},
+            )
+            return None
         estado.registrar_log(
             "guardrail_middleware_error_agente",
             {"agente": nombre_agente, "error": str(exc)},

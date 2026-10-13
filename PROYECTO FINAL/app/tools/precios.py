@@ -6,7 +6,7 @@ from app.estado import EstadoCotizacion
 
 
 # TOOL PRECIOS: puntua opciones disponibles para recomendar una alternativa cotizable.
-def mock_comparar_opciones(estado: EstadoCotizacion) -> dict:
+def comparar_opciones(estado: EstadoCotizacion) -> dict:
     """Ordena opciones disponibles con un scoring simple de afinidad."""
     # PRECIOS: usa reglas de recomendacion, scoring comercial u optimizacion de paquetes.
     ranked = []
@@ -37,7 +37,7 @@ def mock_comparar_opciones(estado: EstadoCotizacion) -> dict:
 
 
 # TOOL COTIZACION: calcula subtotal, IGV y total de la cotizacion.
-def mock_generar_cotizacion(estado: EstadoCotizacion) -> dict:
+def generar_cotizacion(estado: EstadoCotizacion) -> dict:
     """Genera una cotizacion desde el paquete o productos recomendados."""
     # COTIZACION: genera y persiste la cotizacion con ID, totales e impuestos.
     if not estado.opcion_recomendada:

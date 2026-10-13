@@ -11,7 +11,7 @@ from app.repositorios_postgres.calendario_postgres import agregar_reserva_postgr
 
 
 # TOOL CALENDARIO: valida que la fecha y distrito no crucen con eventos ya reservados.
-def mock_validar_calendario_eventos(estado: EstadoCotizacion) -> dict:
+def validar_calendario_eventos(estado: EstadoCotizacion) -> dict:
     """Consulta la agenda para evitar cruces por fecha y distrito."""
     # CALENDARIO: consulta reservas/bloqueos por fecha y distrito.
     if not estado.fecha_evento or not estado.distrito:
@@ -42,7 +42,7 @@ def mock_validar_calendario_eventos(estado: EstadoCotizacion) -> dict:
 
 
 # TOOL CALENDARIO: registra la cotizacion emitida como evento reservado para futuras validaciones.
-def mock_registrar_evento_cotizado(estado: EstadoCotizacion) -> dict:
+def registrar_evento_cotizado(estado: EstadoCotizacion) -> dict:
     """Guarda la reserva cuando se genera una cotizacion."""
     # CALENDARIO: inserta/actualiza una reserva dentro de una transaccion.
     reserva = {
