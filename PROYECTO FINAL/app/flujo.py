@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from datetime import date
 
 from app.estado import EstadoCotizacion
@@ -23,6 +24,8 @@ from app.tools.consulta_rag import buscar_rag
 REQUIRED_FIELDS = ["tipo_evento", "asistentes", "fecha_evento", "distrito", "nombre_cliente", "contacto", "productos_solicitados"]
 ACTIVE_SESSIONS = RepositorioSesionActiva()
 QUOTE_MEMORY = RepositorioMemoriaCotizacion()
+# RUTEO RAG / PISOS: el acceso por pisos (recargos, ascensor, derivacion) solo lo explica la base de conocimiento.
+PATRON_CONSULTA_PISOS = re.compile(r"\b(?:piso|pisos|ascensor|ascensores|escalera|escaleras)\b", re.IGNORECASE)
 
 
 # WORKFLOW PRINCIPAL: recibe el mensaje del usuario y coordina extraccion, decision, negocio y respuesta.
@@ -64,6 +67,10 @@ def resolver_memoria_y_elecciones_previas(mensaje_usuario: str, estado: EstadoCo
 # DECISOR AGENTICO: pide al LLM estructurado una accion y luego la pasa por guardrails de decision.
 def decidir_accion_agentica_turno(mensaje_usuario: str, estado: EstadoCotizacion) -> EstadoCotizacion:
     """Usa el decisor LLM estructurado para decidir accion de alto nivel cuando corresponde."""
+    if PATRON_CONSULTA_PISOS.search(mensaje_usuario):
+        estado.intencion = "consulta_general"
+        estado.registrar_log("ruteo_rag_pisos", {"motivo": "consulta_acceso_por_pisos"})
+        return estado
     agent_action = decidir_siguiente_accion_con_agente(mensaje_usuario, estado)
     if agent_action:
         estado.registrar_log("decision_llm_estructurada", {"accion": agent_action})
