@@ -202,15 +202,15 @@ def construir_svg_cotizacion(estado: Any) -> str:
   <circle cx="720" cy="382" r="42" fill="#047857"/>
   <circle cx="860" cy="382" r="42" fill="#92400e"/>
   <rect x="210" y="465" width="780" height="22" rx="11" fill="#9ca3af"/>
-  <texto x="90" y="86" fill="#ffffff" font-family="Arial, sans-serif" font-size="42" font-weight="700">{title}</texto>
-  <texto x="90" y="136" fill="#e5e7eb" font-family="Arial, sans-serif" font-size="25">{tipo_evento} para {asistentes} personas</texto>
-  <texto x="90" y="174" fill="#d1d5db" font-family="Arial, sans-serif" font-size="22">{distrito} · {fecha_evento}</texto>
-  <texto x="90" y="620" fill="#ffffff" font-family="Arial, sans-serif" font-size="28" font-weight="700">Productos y servicios cotizados</texto>
-  <texto x="90" y="660" fill="#e5e7eb" font-family="Arial, sans-serif" font-size="22">{product_text}</texto>
+  <text x="90" y="86" fill="#ffffff" font-family="Arial, sans-serif" font-size="42" font-weight="700">{title}</text>
+  <text x="90" y="136" fill="#e5e7eb" font-family="Arial, sans-serif" font-size="25">{tipo_evento} para {asistentes} personas</text>
+  <text x="90" y="174" fill="#d1d5db" font-family="Arial, sans-serif" font-size="22">{distrito} · {fecha_evento}</text>
+  <text x="90" y="620" fill="#ffffff" font-family="Arial, sans-serif" font-size="28" font-weight="700">Productos y servicios cotizados</text>
+  <text x="90" y="660" fill="#e5e7eb" font-family="Arial, sans-serif" font-size="22">{product_text}</text>
   {product_chips}
   <rect x="820" y="584" width="290" height="96" rx="18" fill="#ffffff" opacity="0.95"/>
-  <texto x="850" y="624" fill="#374151" font-family="Arial, sans-serif" font-size="20">Total referencial</texto>
-  <texto x="850" y="664" fill="#111827" font-family="Arial, sans-serif" font-size="34" font-weight="700">{total}</texto>
+  <text x="850" y="624" fill="#374151" font-family="Arial, sans-serif" font-size="20">Total referencial</text>
+  <text x="850" y="664" fill="#111827" font-family="Arial, sans-serif" font-size="34" font-weight="700">{total}</text>
 </svg>
 """
 
@@ -236,7 +236,7 @@ def renderizar_chips_productos(products: list[str]) -> str:
         label = html.escape(product[:18])
         chips.append(
             f'<rect x="{x}" y="690" width="150" height="38" rx="19" fill="#f59e0b" opacity="0.92"/>'
-            f'<texto x="{x + 18}" y="715" fill="#111827" font-family="Arial, sans-serif" font-size="16" font-weight="700">{label}</texto>'
+            f'<text x="{x + 18}" y="715" fill="#111827" font-family="Arial, sans-serif" font-size="16" font-weight="700">{label}</text>'
         )
     return "\n  ".join(chips)
 
