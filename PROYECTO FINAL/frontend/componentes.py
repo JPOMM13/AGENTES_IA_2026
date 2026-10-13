@@ -10,6 +10,8 @@ def renderizar_tarjeta_cotizacion(respuesta):
     if not cotizacion:
         return
 
+    estado = respuesta.get("estado") or {}
+    derivacion = estado.get("resumen_derivacion") or {}
     moneda = "S/" if cotizacion.get("currency") == "PEN" else cotizacion.get("currency", "")
     with st.container(border=True):
         st.markdown(f"**Cotización · {moneda} {cotizacion['total']:,.2f}**")
@@ -24,6 +26,13 @@ def renderizar_tarjeta_cotizacion(respuesta):
                 st.write(f"{nombre}: {item.get('quantity', 1)} {item.get('unit', 'unidad')} · {moneda} {item.get('subtotal', 0):,.2f}")
             for condicion in cotizacion.get("conditions", []):
                 st.caption(condicion)
+        if derivacion.get("url"):
+            st.markdown("**Continuar venta con asesor humano**")
+            st.write(
+                f"Tu cotización ya está lista. Para completar la venta, puedes continuar con "
+                f"{derivacion.get('assigned_to', 'Asesor humano 1')} por WhatsApp."
+            )
+            st.link_button("Abrir WhatsApp", derivacion["url"])
 
 
 def renderizar_tarjeta_imagen(respuesta):

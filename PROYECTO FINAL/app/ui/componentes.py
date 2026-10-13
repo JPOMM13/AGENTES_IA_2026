@@ -101,3 +101,10 @@ def renderizar_tarjeta_cotizacion(estado: EstadoCotizacion) -> None:
     st.write(f"Vigencia: {cotizacion['valid_until']}")
     for condition in cotizacion["conditions"]:
         st.caption(condition)
+    if estado.resumen_derivacion and estado.resumen_derivacion.get("url"):
+        st.markdown("**Continuar venta con asesor humano**")
+        st.write(
+            "Tu cotizacion ya esta lista. Para completar la venta, puedes continuar con "
+            f"{estado.resumen_derivacion.get('assigned_to', 'Asesor humano 1')} por WhatsApp."
+        )
+        st.link_button("Abrir WhatsApp", estado.resumen_derivacion["url"])
