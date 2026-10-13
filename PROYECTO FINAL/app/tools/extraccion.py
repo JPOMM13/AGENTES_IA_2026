@@ -411,7 +411,8 @@ def _normalizar_distrito_libre(value: str) -> str | None:
         return None
     if any(alias in candidato_lower for aliases in obtener_aliases_tipos_evento().values() for alias in aliases):
         return None
-    if any(palabra in {"personas", "persona", "asistentes", "cotizacion", "cotización", "evento"} for palabra in palabras):
+    if any(palabra in {"personas", "persona", "asistentes", "cotizacion", "cotización", "evento",
+                       "piso", "pisos"} for palabra in palabras):
         return None
     return candidato.title()
 
