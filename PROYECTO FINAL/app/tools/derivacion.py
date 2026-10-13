@@ -6,12 +6,14 @@ from app.data.datos_mock import WHATSAPP_NUMBER
 from app.estado import EstadoCotizacion
 
 
-# TOOL DERIVACION HUMANA: prepara enlace WhatsApp solo cuando el usuario solicita humano.
+# TOOL DERIVACION HUMANA: prepara enlace WhatsApp para continuar con un asesor humano simulado.
 def derivar_whatsapp(estado: EstadoCotizacion, reason: str) -> dict:
     """Prepara una derivacion por WhatsApp con resumen del caso."""
-    # DERIVACION: crea la derivacion en CRM/ticketing y prepara el mensaje por WhatsApp Business API.
+    # DERIVACION HUMAN-IN-THE-LOOP:
+    # En produccion crearia ticket/canal real; en esta POC devuelve un enlace WhatsApp simulado.
     summary = {
         "intencion": estado.intencion,
+        "asesor_asignado": "Asesor humano 1",
         "captured_data": {
             "tipo_evento": estado.tipo_evento,
             "asistentes": estado.asistentes,
@@ -27,6 +29,8 @@ def derivar_whatsapp(estado: EstadoCotizacion, reason: str) -> dict:
     return {
         "handoff_id": "DER-0001",
         "channel": "whatsapp",
-        "url": f"https://wa.me/{WHATSAPP_NUMBER}?texto={texto}",
+        "assigned_to": "Asesor humano 1",
+        "mock": True,
+        "url": f"https://wa.me/{WHATSAPP_NUMBER}?text={texto}",
         "summary": summary,
     }

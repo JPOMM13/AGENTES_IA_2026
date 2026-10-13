@@ -112,6 +112,38 @@ def test_cotizacion_despues_recomendacion():
     respuesta, estado = manejar_mensaje("genera la cotizacion", estado)
     assert "cotizacion" in respuesta.lower()
     assert estado.cotizacion["total"] == 3304.0
+    assert "Continuar venta con asesor humano" in respuesta
+    assert "https://wa.me/" in respuesta
+    assert estado.resumen_derivacion is not None
+    assert estado.resumen_derivacion["assigned_to"] == "Asesor humano 1"
+
+
+# Prueba que el usuario pueda pedir un asesor humano explicitamente en cualquier momento.
+def test_derivacion_explicita_entrega_link_whatsapp():
+    estado = EstadoCotizacion()
+
+    respuesta, estado = manejar_mensaje("quiero hablar con un asesor humano por whatsapp", estado)
+
+    assert estado.intencion == "derivacion_humana"
+    assert estado.derivacion_confirmada is True
+    assert estado.resumen_derivacion is not None
+    assert "WhatsApp simulado" in respuesta
+    assert "Asesor humano 1" in respuesta
+    assert "https://wa.me/" in respuesta
+
+
+# Prueba que pedir una persona que atienda active human-in-the-loop y no capture un nombre falso.
+def test_comunicame_con_persona_activa_derivacion_humana():
+    estado = EstadoCotizacion()
+
+    respuesta, estado = manejar_mensaje("Hola que tal, comunicame con una persona para que me atienda", estado)
+
+    assert estado.intencion == "derivacion_humana"
+    assert estado.nombre_cliente is None
+    assert estado.derivacion_confirmada is True
+    assert "WhatsApp simulado" in respuesta
+    assert "Asesor humano 1" in respuesta
+    assert "tipo de evento" not in respuesta
 
 
 # Prueba que una mala clasificacion del extractor LLM no limpie el estado al generar cotizacion.
@@ -601,6 +633,45 @@ def test_contacto_coincidente_pregunta_antes_sobrescribir_cotizacion(monkeypatch
     assert retomado.id_sesion == current.id_sesion
     assert retomado.asistentes == 45
     assert retomado.productos_solicitados == ["cerveza", "vino"]
+
+
+# Prueba que elegir seguir con la cotizacion nueva se resuelva antes del guardrail semantico.
+def test_seguir_con_esta_nueva_resuelve_previa_antes_de_guardrail(monkeypatch, tmp_path):
+    from app import grafo_cotizador
+    from app.guardrails.entrada import ResultadoGuardrailEntrada
+
+    monkeypatch.setattr(session_store, "STORE_PATH", tmp_path / "mock_session_memory.json")
+    monkeypatch.setattr(redis_session_store, "REDIS_MOCK_PATH", tmp_path / "mock_redis_session.json")
+    previo = EstadoCotizacion()
+    _, previo = manejar_mensaje(
+        "Soy John Manchego, mi telefono es 989515182. Necesito vino y hielo para un matrimonio de 40 personas el 24 de febrero de 2027 en Miraflores",
+        previo,
+    )
+
+    actual = EstadoCotizacion()
+    _, actual = manejar_mensaje(
+        "Quiero una cotizacion para un evento de matrimonio, para 30 personas, para el 15 de febrero del 2027 en Miraflores, mi nombre es John Manchego y mi numero de celular es 989515182",
+        actual,
+    )
+    assert actual.estado_previo_pendiente is not None
+
+    monkeypatch.setattr(
+        grafo_cotizador,
+        "validar_mensaje_entrada",
+        lambda mensaje: ResultadoGuardrailEntrada(
+            permitido=False,
+            motivo="guardrail_llm:fuera_de_scope",
+            respuesta_segura="bloqueado por guardrail",
+        ),
+    )
+
+    respuesta, actual = manejar_mensaje("seguir con esta nueva", actual)
+
+    assert actual.estado_previo_pendiente is None
+    assert "bloqueado por guardrail" not in respuesta
+    assert "seguimos con la informacion nueva" in respuesta
+    assert actual.asistentes == 30
+    assert actual.fecha_evento == "2027-02-15"
 
 
 # Prueba que una cotizacion retomada no muestre totales antiguos y revalide calendario antes de emitir.

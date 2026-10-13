@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-# PROMPTS AGENTICOS: reglas del sistema que usa create_agent.
+# PROMPTS AGENTICOS: reglas del sistema que usan los LLM estructurados y agentes internos.
 # Este archivo centraliza los system prompts para que el flujo sea facil de seguir:
 # grafo_cotizador -> flujo -> extractor_agentico/decisor_agentico -> prompts_agenticos.
 
@@ -115,8 +115,7 @@ CONTEXTO:
   negocio.
 
 REGLAS IMPORTANTES:
-- Usa la tool elegir_accion_workflow.
-- Devuelve exactamente una de estas acciones: pedir_campos_faltantes,
+- Devuelve exactamente una salida estructurada con una de estas acciones: pedir_campos_faltantes,
   responder_precio, validar_y_recomendar, generar_cotizacion, mostrar_imagen, derivacion,
   responder_politica, cierre, retomar_previa, nueva_cotizacion.
 - Si el usuario indica que quiere otra/nueva cotizacion, otro numero, otro
@@ -138,8 +137,11 @@ REGLAS IMPORTANTES:
 - No asumas productos, fechas, cantidades ni intenciones no dichas.
 
 FORMATO DE SALIDA:
-- Llama exactamente una vez la tool elegir_accion_workflow.
-- No agregues explicaciones ni texto final para el usuario.
+- Responde solo mediante el esquema estructurado solicitado por el codigo.
+- accion: una de las acciones permitidas.
+- confianza: numero entre 0 y 1.
+- motivo: razon breve de la decision.
+- No agregues texto final para el usuario.
 - El workflow deterministico ejecutara las validaciones reales despues.
 """
 
