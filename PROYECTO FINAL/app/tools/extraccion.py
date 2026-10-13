@@ -6,6 +6,7 @@ from typing import Any
 
 from app.clasificador_intencion import clasificar_intencion_con_llm
 from app.guardrails.decision import (
+    es_derivacion_humana_explicita,
     es_solicitud_generar_cotizacion,
     es_solicitud_nueva_cotizacion,
     es_solicitud_recuperar_memoria,
@@ -41,6 +42,7 @@ def extraer_intencion_y_campos(message: str, estado: EstadoCotizacion) -> dict[s
     """Extrae campos del mensaje y resuelve la intencion con el router agentico."""
     texto = message.lower()
     fields: dict[str, Any] = {}
+    es_derivacion_explicita = es_derivacion_humana_explicita(texto)
 
     # ROUTER DE INTENCION: primero el LLM interpreta que quiere hacer el usuario.
     intencion_clasificada = _clasificar_intencion_estructurada(message, estado)
@@ -78,7 +80,7 @@ def extraer_intencion_y_campos(message: str, estado: EstadoCotizacion) -> dict[s
     if presupuesto:
         fields["presupuesto"] = presupuesto
 
-    if not (distrito and _mensaje_es_distrito_suelto(message, distrito)):
+    if not es_derivacion_explicita and not (distrito and _mensaje_es_distrito_suelto(message, distrito)):
         nombre_cliente = _extraer_nombre_cliente(message)
         if not nombre_cliente and "nombre_cliente" in estado.campos_faltantes:
             nombre_cliente = _extraer_nombre_cliente_contextual(message)
@@ -108,6 +110,8 @@ def extraer_intencion_y_campos(message: str, estado: EstadoCotizacion) -> dict[s
 
     agentic_fields = _extraer_campos_con_agente(message, estado)
     fields = _fusionar_campos_agenticos(fields, agentic_fields)
+    if es_derivacion_explicita and not _declara_nombre_explicito(message):
+        fields.pop("nombre_cliente", None)
 
     # GUARDRAIL DE INTENCION: valida la intencion del LLM contra campos, contexto y respaldo operativo.
     intencion = _resolver_intencion_principal(message, estado, fields, intencion_clasificada)
@@ -124,6 +128,8 @@ def _resolver_intencion_principal(
 ) -> str:
     """Elige la intencion final con clasificacion LLM y guardrails de seguridad."""
     texto = mensaje_usuario.lower()
+    if es_derivacion_humana_explicita(texto):
+        return "derivacion_humana"
     if fields.get("product_changes"):
         return "modificar_pedido"
     if estado.intencion == "retomar_previa" and "contacto" in estado.campos_faltantes and fields.get("contacto"):
@@ -572,6 +578,12 @@ def _extraer_nombre_cliente(message: str) -> str | None:
                     name = name[: name.lower().index(stop_word)].strip()
             return name.title()
     return None
+
+
+# GUARDRAIL DE EXTRACCION: permite conservar nombre solo si el usuario lo declaro claramente.
+def _declara_nombre_explicito(message: str) -> bool:
+    """Distingue nombres reales de frases como 'persona que me atienda'."""
+    return bool(re.search(r"\b(?:me llamo|soy|mi nombre es|a nombre de)\b", message, flags=re.IGNORECASE))
 
 
 # EXTRACCION REGLADA: infiere nombre solo desde frases contextuales claras.

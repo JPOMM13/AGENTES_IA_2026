@@ -20,8 +20,10 @@ from app.observabilidad import configurar_langsmith
 from app.estado import EstadoCotizacion
 from app.flujo import (
     decidir_accion_agentica_turno,
+    detectar_eleccion_previa_usuario,
     ejecutar_decision_negocio,
     finalizar_turno_cotizador,
+    manejar_eleccion_previa_pendiente,
     preparar_turno_usuario,
     resolver_memoria_y_elecciones_previas,
 )
@@ -102,9 +104,9 @@ def obtener_grafo_cotizador():
 
     # NODO decidir_accion_agentica:
     # - Que hace: decide la siguiente accion del workflow: pedir faltantes, recomendar, cotizar, derivar, etc.
-    # - LLM: si LLM_ENABLED=true usa create_agent con OpenAI segun LLM_PROVIDER=openai.
+    # - LLM: si LLM_ENABLED=true usa OpenAI con salida estructurada segun LLM_PROVIDER=openai.
     # - System prompt: PROMPT_SISTEMA_DECISOR.
-    # - Tools: usa tool interna elegir_accion_workflow; esa tool solo devuelve una accion permitida.
+    # - Tools: no ejecuta tools; solo propone una accion y luego el guardrail de decision la valida.
     # - BD: no consulta Redis, PostgreSQL negocio ni PostgreSQL NoSQL memory.
     grafo.add_node("decidir_accion_agentica", decidir_accion_agentica)
 
@@ -159,6 +161,24 @@ def validar_entrada(estado_grafo: EstadoGrafoCotizador) -> EstadoGrafoCotizador:
             "estado": resumir_estado_para_log(estado),
         },
     )
+    # MEMORIA PERSISTENTE / GUARDRAIL CONTEXTUAL:
+    # Si el usuario esta respondiendo a "retomar la anterior" vs "seguir con esta nueva",
+    # esa frase depende del contexto y debe resolverse antes del guardrail semantico.
+    if estado.estado_previo_pendiente and detectar_eleccion_previa_usuario(mensaje):
+        resultado_memoria = manejar_eleccion_previa_pendiente(mensaje, estado)
+        if resultado_memoria:
+            respuesta, estado_resuelto = resultado_memoria
+            estado_resuelto.registrar_log(
+                "nodo_validar_entrada_eleccion_previa",
+                {"eleccion_resuelta": True, "estado": resumir_estado_para_log(estado_resuelto)},
+            )
+            return {
+                **estado_grafo,
+                "estado_cotizacion": estado_resuelto,
+                "respuesta_base": respuesta,
+                "etapa": estado_resuelto.etapa,
+                "finalizado": True,
+            }
     validacion = validar_mensaje_entrada(mensaje)
     estado.registrar_log(
         "nodo_validar_entrada",
@@ -234,9 +254,9 @@ def gestionar_memoria_persistente(estado_grafo: EstadoGrafoCotizador) -> EstadoG
     }
 
 
-# AGENTE DECISOR / NODO LANGGRAPH: permite que create_agent elija la siguiente accion de alto nivel.
+# DECISOR AGENTICO / NODO LANGGRAPH: permite que el LLM estructurado elija la siguiente accion de alto nivel.
 def decidir_accion_agentica(estado_grafo: EstadoGrafoCotizador) -> EstadoGrafoCotizador:
-    """Permite que create_agent decida la siguiente accion de alto nivel."""
+    """Permite que el decisor LLM estructurado proponga la siguiente accion de alto nivel."""
     mensaje = estado_grafo["mensaje_usuario"]
     estado_entrada = estado_grafo["estado_cotizacion"]
     estado_entrada.registrar_log(

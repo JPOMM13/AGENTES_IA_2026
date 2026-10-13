@@ -303,7 +303,7 @@ def es_solicitud_revisar_pedido(texto: str) -> bool:
 # GUARDRAIL DE DERIVACION: permite derivar a humano solo si el usuario lo pide explicitamente.
 def es_derivacion_humana_explicita(texto: str) -> bool:
     """Valida que la derivacion humana haya sido pedida por el usuario."""
-    return any(
+    if any(
         termino in texto
         for termino in [
             "asesor",
@@ -317,4 +317,13 @@ def es_derivacion_humana_explicita(texto: str) -> bool:
             "atencion humana",
             "atención humana",
         ]
-    )
+    ):
+        return True
+    patrones = [
+        r"\bcomun[ií]came\s+con\s+(?:una\s+)?persona\b",
+        r"\bcomunicarme\s+con\s+(?:una\s+)?persona\b",
+        r"\bcomunicar\s+con\s+(?:una\s+)?persona\b",
+        r"\b(?:quiero|necesito)\s+(?:hablar|conversar)\s+con\s+(?:una\s+)?persona\b",
+        r"\b(?:persona|alguien)\s+(?:que\s+)?(?:me\s+)?atienda\b",
+    ]
+    return any(re.search(patron, texto) for patron in patrones)

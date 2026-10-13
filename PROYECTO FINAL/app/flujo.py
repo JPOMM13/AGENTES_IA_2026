@@ -61,12 +61,12 @@ def resolver_memoria_y_elecciones_previas(mensaje_usuario: str, estado: EstadoCo
     return None
 
 
-# AGENTE DECISOR: pide al LLM una accion y luego la pasa por guardrails de decision.
+# DECISOR AGENTICO: pide al LLM estructurado una accion y luego la pasa por guardrails de decision.
 def decidir_accion_agentica_turno(mensaje_usuario: str, estado: EstadoCotizacion) -> EstadoCotizacion:
-    """Usa create_agent para decidir accion de alto nivel cuando corresponde."""
+    """Usa el decisor LLM estructurado para decidir accion de alto nivel cuando corresponde."""
     agent_action = decidir_siguiente_accion_con_agente(mensaje_usuario, estado)
     if agent_action:
-        estado.registrar_log("create_agent_decision", {"accion": agent_action})
+        estado.registrar_log("decision_llm_estructurada", {"accion": agent_action})
     accion_validada = validar_decision_agentica(agent_action, mensaje_usuario, estado)
     if accion_validada:
         aplicar_accion_agente_a_intencion(accion_validada, estado, mensaje_usuario)
@@ -114,8 +114,7 @@ def ejecutar_decision_negocio(mensaje_usuario: str, estado: EstadoCotizacion) ->
 
     if estado.intencion == "derivacion_humana":
         estado.derivacion_confirmada = True
-        handoff = derivar_whatsapp(estado, reason="Solicitud explicita del usuario.")
-        estado.resumen_derivacion = handoff
+        handoff = preparar_derivacion_humana(estado, "Solicitud explicita del usuario.")
         respuesta = renderizar_respuesta_derivacion(handoff)
         return respuesta, estado, "derivacion"
 
@@ -131,8 +130,7 @@ def ejecutar_decision_negocio(mensaje_usuario: str, estado: EstadoCotizacion) ->
 
     if estado.intencion == "confirmacion_derivacion" and estado.derivacion_ofrecida:
         estado.derivacion_confirmada = True
-        handoff = derivar_whatsapp(estado, reason="Usuario acepta derivacion por WhatsApp.")
-        estado.resumen_derivacion = handoff
+        handoff = preparar_derivacion_humana(estado, "Usuario acepta derivacion por WhatsApp.")
         respuesta = renderizar_respuesta_derivacion(handoff)
         return respuesta, estado, "derivacion"
 
@@ -207,6 +205,8 @@ def ejecutar_decision_negocio(mensaje_usuario: str, estado: EstadoCotizacion) ->
         estado.registrar_log("registrar_evento_cotizado", reserva_evento)
         estado.imagen_artefacto_cotizacion = generar_artefacto_visual_cotizacion(estado)
         estado.registrar_log("generar_artefacto_visual_cotizacion", {"path": estado.imagen_artefacto_cotizacion})
+        # HUMAN-IN-THE-LOOP: al emitir cotizacion se prepara un enlace simulado para continuar la venta con un asesor.
+        preparar_derivacion_humana(estado, "Cotizacion generada; continuar cierre comercial con asesor humano.")
         respuesta = renderizar_respuesta_cotizacion(estado)
         return respuesta, estado, "cotizacion"
 
@@ -370,10 +370,8 @@ def manejar_eleccion_previa_pendiente(mensaje_usuario: str, estado: EstadoCotiza
         )
         estado.estado_previo_pendiente = None
         return None
-    texto = mensaje_usuario.lower()
-    wants_previous = any(term in texto for term in ["retomar", "anterior", "previa", "previo", "seguir con esa", "continua esa", "continúa esa"])
-    wants_current = any(term in texto for term in ["nuevo", "nueva", "actual", "seguir con esta", "continua con esta", "continúa con esta"])
-    if wants_previous:
+    eleccion = detectar_eleccion_previa_usuario(mensaje_usuario)
+    if eleccion == "retomar_previa":
         previo = EstadoCotizacion.desde_diccionario_persistido(estado.estado_previo_pendiente)
         retomado = QUOTE_MEMORY.hidratar(estado, previo)
         retomado.estado_previo_pendiente = None
@@ -381,7 +379,7 @@ def manejar_eleccion_previa_pendiente(mensaje_usuario: str, estado: EstadoCotiza
         retomado.campos_faltantes = encontrar_campos_faltantes(retomado)
         retomado.registrar_log("retomar_previa_despues_coincidencia_contacto", {"contacto": retomado.contacto})
         return renderizar_respuesta_previa_retomada(retomado), retomado
-    if wants_current:
+    if eleccion == "seguir_actual":
         estado.estado_previo_pendiente = None
         estado.campos_faltantes = encontrar_campos_faltantes(estado)
         respuesta = (
@@ -394,6 +392,40 @@ def manejar_eleccion_previa_pendiente(mensaje_usuario: str, estado: EstadoCotiza
         "Puedes decir `retomar la anterior` o `seguir con esta nueva`."
     )
     return respuesta, estado
+
+
+# MEMORIA PERSISTENTE / GUARDRAIL CONTEXTUAL: detecta respuestas validas a la pregunta retomar vs continuar.
+def detectar_eleccion_previa_usuario(mensaje_usuario: str) -> str | None:
+    """Devuelve la eleccion del usuario cuando responde a una cotizacion previa pendiente."""
+    texto = mensaje_usuario.lower()
+    quiere_previa = any(
+        termino in texto
+        for termino in [
+            "retomar",
+            "anterior",
+            "previa",
+            "previo",
+            "seguir con esa",
+            "continua esa",
+            "continúa esa",
+        ]
+    )
+    quiere_actual = any(
+        termino in texto
+        for termino in [
+            "nuevo",
+            "nueva",
+            "actual",
+            "seguir con esta",
+            "continua con esta",
+            "continúa con esta",
+        ]
+    )
+    if quiere_previa:
+        return "retomar_previa"
+    if quiere_actual:
+        return "seguir_actual"
+    return None
 
 
 # GUARDRAIL DE MEMORIA: si cambia el telefono, se descarta la previa pendiente y se busca con el nuevo identificador.
@@ -651,6 +683,19 @@ def pedir_confirmacion_derivacion(estado: EstadoCotizacion) -> str:
     return f"{reason} Si te parece, puedo dejar el caso listo para que un asesor lo continue por WhatsApp."
 
 
+# HUMAN-IN-THE-LOOP: prepara el enlace WhatsApp simulado y lo guarda en el estado para seguimiento.
+def preparar_derivacion_humana(estado: EstadoCotizacion, motivo: str) -> dict:
+    """Crea un handoff simulado hacia un asesor humano por WhatsApp."""
+    handoff = derivar_whatsapp(estado, reason=motivo)
+    estado.derivacion_ofrecida = True
+    estado.resumen_derivacion = handoff
+    estado.registrar_log(
+        "preparar_derivacion_humana",
+        {"handoff_id": handoff["handoff_id"], "assigned_to": handoff["assigned_to"], "motivo": motivo},
+    )
+    return handoff
+
+
 # RESPUESTA DE NEGOCIO: muestra recomendacion basada en catalogo, cobertura, stock y precios.
 def renderizar_respuesta_recomendacion(estado: EstadoCotizacion) -> str:
     """Redacta la recomendacion validada antes de emitir cotizacion."""
@@ -690,11 +735,20 @@ def renderizar_respuesta_cotizacion(estado: EstadoCotizacion) -> str:
     """Redacta el detalle de la cotizacion ya generada."""
     cotizacion = estado.cotizacion or {}
     option = estado.opcion_recomendada or {}
+    handoff = estado.resumen_derivacion or {}
     conditions = "\n".join(f"- {condition}" for condition in cotizacion.get("conditions", []))
     details = "\n".join(
         f"- {item['quantity']} {item['unit']} x {item['concept']}: {cotizacion.get('currency')} {item['subtotal']:.2f}"
         for item in cotizacion.get("details", [])
     )
+    bloque_asesor = ""
+    if handoff.get("url"):
+        bloque_asesor = (
+            "\n\nContinuar venta con asesor humano:\n"
+            f"- Canal: WhatsApp simulado\n"
+            f"- Asesor: {handoff.get('assigned_to', 'Asesor humano 1')}\n"
+            f"- Link: {handoff['url']}"
+        )
     return (
         f"Listo, genere la cotizacion **{cotizacion.get('quote_id')}** para **{option.get('name')}**.\n"
         f"Cotizante: {estado.nombre_cliente} | Contacto seguimiento: {estado.contacto}\n\n"
@@ -705,6 +759,7 @@ def renderizar_respuesta_cotizacion(estado: EstadoCotizacion) -> str:
         f"- Vigencia: {cotizacion.get('valid_until')}\n\n"
         f"{renderizar_resumen_validacion(estado)}\n\n"
         f"Condiciones:\n{conditions}"
+        f"{bloque_asesor}"
     )
 
 
@@ -1097,6 +1152,8 @@ def renderizar_respuesta_derivacion(handoff: dict) -> str:
     return (
         "Listo, deje preparada una derivacion por WhatsApp.\n\n"
         f"- ID: {handoff['handoff_id']}\n"
+        f"- Canal: WhatsApp simulado\n"
+        f"- Asesor: {handoff.get('assigned_to', 'Asesor humano 1')}\n"
         f"- Motivo: {summary['reason']}\n"
         f"- Link: {handoff['url']}\n\n"
         "El resumen para el asesor queda disponible en el panel lateral."
@@ -1164,6 +1221,8 @@ def renderizar_memoria_temporal(estado: EstadoCotizacion) -> str:
         captured.append(f"preferencias: {', '.join(estado.preferencias)}")
 
     captured_text = "; ".join(captured) if captured else "sin datos capturados todavia"
+    if estado.intencion == "derivacion_humana":
+        return f"_Tengo en memoria: {captured_text}. Derivacion humana preparada por WhatsApp._"
     if estado.intencion == "retomar_previa" and not estado.contacto:
         return f"_Tengo en memoria: {captured_text}. Siguiente por confirmar: telefono celular para buscar la cotizacion anterior._"
     missing = encontrar_campos_faltantes(estado)
