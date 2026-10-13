@@ -13,6 +13,7 @@ from app.guardrails.decision import (
     validar_override_intencion,
 )
 from app.estado import EstadoCotizacion
+from app.utilidades.fechas import obtener_hoy, resolver_fecha_relativa
 from app.referencias_negocio import (
     obtener_aliases_productos,
     obtener_aliases_productos_no_soportados,
@@ -62,15 +63,19 @@ def extraer_intencion_y_campos(message: str, estado: EstadoCotizacion) -> dict[s
     if asistentes:
         fields["asistentes"] = asistentes
 
-    fecha_evento, error_fecha = _extraer_fecha_validada(texto)
-    if error_fecha:
-        fields.setdefault("errores_validacion_campos", []).append(error_fecha)
-    if fecha_evento:
-        fields["fecha_evento"] = fecha_evento
-    elif not error_fecha:
-        fecha_parcial = _extraer_fecha_parcial(texto)
-        if fecha_parcial:
-            fields["fecha_parcial"] = fecha_parcial
+    # FECHAS: un solo resolutor deterministico con la fecha de hoy inyectada (COTIZADOR_FECHA_HOY en evals/demo).
+    # Cubre absolutas (25/12, 2026-11-20, 20 de noviembre), relativas (manana, el proximo sabado, en dos semanas,
+    # el sabado 24), parciales (solo dia o solo mes) y fechas sin anio que ya pasaron (-> siguiente anio con nota).
+    # Si la expresion es un rango ("la proxima semana", "a fin de mes") no se adivina: se pide el dia exacto.
+    resultado_fecha = resolver_fecha_relativa(texto, obtener_hoy())
+    if resultado_fecha.error:
+        fields.setdefault("errores_validacion_campos", []).append(resultado_fecha.error)
+    elif resultado_fecha.fecha_iso:
+        fields["fecha_evento"] = resultado_fecha.fecha_iso
+        if resultado_fecha.necesita_confirmacion and resultado_fecha.nota:
+            fields["fecha_nota"] = resultado_fecha.nota
+    elif resultado_fecha.fecha_parcial:
+        fields["fecha_parcial"] = resultado_fecha.fecha_parcial
 
     distrito = _extraer_distrito(message, esperando_distrito="distrito" in estado.campos_faltantes)
     if distrito:
@@ -306,56 +311,13 @@ def _extraer_asistentes_contextuales(texto: str) -> int | None:
     return None
 
 
-# GUARDRAIL DE FECHA: obtiene fecha completa y rechaza fechas imposibles antes de guardar estado.
-def _extraer_fecha_validada(texto: str) -> tuple[str | None, str | None]:
-    """Extrae fecha completa y devuelve error si el calendario no permite esa fecha."""
-    iso = re.search(r"(20\d{2})[-/](\d{1,2})[-/](\d{1,2})", texto)
-    if iso:
-        anio, mes, dia = map(int, iso.groups())
-        return _fecha_iso_o_error(anio, mes, dia)
-
-    numeric = re.search(r"(\d{1,2})[-/](\d{1,2})(?:[-/](20\d{2}))?", texto)
-    if numeric:
-        dia, mes, anio = numeric.groups()
-        return _fecha_iso_o_error(int(anio or 2026), int(mes), int(dia))
-
-    for nombre_mes, month_num in MONTHS.items():
-        match = re.search(rf"(?:para\s+)?(?:el\s+)?(\d{{1,2}})\s*(?:de\s*)?{nombre_mes}(?:\s*(?:del?|de)?\s*(20\d{{2}}))?", texto)
-        if match:
-            dia, anio = match.groups()
-            return _fecha_iso_o_error(int(anio or 2026), month_num, int(dia))
-    return None, None
 
 
-# GUARDRAIL DE FECHA: valida dia, mes y anio usando calendario real para evitar fechas alucinadas.
-def _fecha_iso_o_error(anio: int, mes: int, dia: int) -> tuple[str | None, str | None]:
-    """Convierte a ISO solo si la fecha existe en el calendario."""
-    try:
-        return date(anio, mes, dia).isoformat(), None
-    except ValueError:
-        return None, f"La fecha indicada no es valida: {dia:02d}/{mes:02d}/{anio}."
 
 
-# VALIDACION DE FECHA: guarda dia, mes o anio parcial cuando falta completar la fecha.
-def _extraer_fecha_parcial(texto: str) -> dict[str, int | None] | None:
-    """Extrae dia, mes o anio incompleto cuando falta parte de la fecha."""
-    partial: dict[str, int | None] = {"dia": None, "mes": None, "anio": None}
-    for nombre_mes, month_num in MONTHS.items():
-        if nombre_mes in texto:
-            partial["mes"] = month_num
-            break
 
-    day_match = re.search(r"(?:para\s+el|el|dia|día)\s+(\d{1,2})(?:\b|$)", texto)
-    if day_match:
-        possible_day = int(day_match.group(1))
-        if 1 <= possible_day <= 31:
-            partial["dia"] = possible_day
 
-    year_match = re.search(r"\b(20\d{2})\b", texto)
-    if year_match:
-        partial["anio"] = int(year_match.group(1))
 
-    return partial if any(value is not None for value in partial.values()) else None
 
 
 # EXTRACCION REGLADA: obtiene distrito desde el mensaje, incluso si esta fuera de cobertura.

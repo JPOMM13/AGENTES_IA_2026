@@ -27,6 +27,10 @@ class EstadoCotizacion:
     asistentes: int | None = None
     fecha_evento: str | None = None
     fecha_parcial: dict[str, int | None] = field(default_factory=lambda: {"dia": None, "mes": None, "anio": None})
+    # FECHAS: cuando la fecha se infirio ("el proximo sabado", "15 de enero" ya pasado -> 2027) se guarda una nota
+    # para mostrarla UNA vez y pedir confirmacion, en vez de asumir en silencio.
+    fecha_requiere_confirmacion: bool = False
+    fecha_nota: str | None = None
     distrito: str | None = None
     presupuesto: float | None = None
     productos_solicitados: list[str] = field(default_factory=list)

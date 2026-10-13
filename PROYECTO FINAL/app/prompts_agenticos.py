@@ -72,8 +72,9 @@ REGLAS IMPORTANTES:
   "John Manchego" y contacto es "989515182".
 - Normaliza tipo_evento a uno de: matrimonio, cumpleanos, corporativo, reunion,
   aniversario, lanzamiento, fin de ano.
-- Normaliza fecha_evento a YYYY-MM-DD solo si hay dia y mes. Usa 2026 si no se
-  menciona anio.
+- Normaliza fecha_evento a YYYY-MM-DD solo si el usuario dio dia, mes y anio.
+  Si no menciona el anio, NO lo inventes: deja fecha_evento vacio y usa
+  partial_day y partial_month (el sistema resuelve el anio con la fecha de hoy).
 - Si falta dia o mes, no llenes fecha_evento; usa partial_day o partial_month.
 - requested_products_csv puede incluir solo productos/servicios concretos:
   cerveza, vino, ron, agua, gaseosa, hielo, bartenders, bar movil.

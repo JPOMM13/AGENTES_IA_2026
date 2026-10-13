@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import date
 
 from app.estado import EstadoCotizacion
+from app.utilidades.fechas import obtener_hoy
 from app.data.datos_mock import CATALOG, PRODUCTS
 from app.decisor_agentico import decidir_siguiente_accion_con_agente, obtener_disponibilidad_tools, es_solicitud_derivacion_explicita
 from app.artefactos import generar_artefacto_visual_cotizacion
@@ -246,6 +247,10 @@ def fusionar_extraccion_en_estado(estado: EstadoCotizacion, extraction: dict) ->
 
     if fields.get("fecha_parcial") and not estado.fecha_evento:
         fusionar_fecha_parcial(estado, fields["fecha_parcial"])
+    # FECHAS: si la fecha se infirio, se guarda la nota para confirmarla con el cliente (una sola vez).
+    if fields.get("fecha_nota") and fields.get("fecha_evento"):
+        estado.fecha_requiere_confirmacion = True
+        estado.fecha_nota = fields["fecha_nota"]
 
     for preference in fields.get("preferencias", []):
         if preference not in estado.preferencias:
@@ -650,11 +655,19 @@ def fusionar_fecha_parcial(estado: EstadoCotizacion, fecha_parcial: dict[str, in
         if fecha_parcial.get(key) is not None:
             estado.fecha_parcial[key] = fecha_parcial[key]
     if estado.fecha_parcial.get("dia") and estado.fecha_parcial.get("mes"):
-        anio = estado.fecha_parcial.get("anio") or 2026
+        hoy = obtener_hoy()
+        anio_explicito = estado.fecha_parcial.get("anio")
+        anio = anio_explicito or hoy.year
         dia = estado.fecha_parcial["dia"]
         mes = estado.fecha_parcial["mes"]
         try:
-            estado.fecha_evento = date(anio, mes, dia).isoformat()
+            fecha = date(anio, mes, dia)
+            # Sin anio explicito, un dia/mes que ya paso se interpreta como el del proximo anio y se pide confirmar.
+            if not anio_explicito and fecha < hoy:
+                fecha = date(anio + 1, mes, dia)
+                estado.fecha_requiere_confirmacion = True
+                estado.fecha_nota = f"Como el {dia} de {nombre_mes(mes)} de {anio} ya paso, lo registre para {anio + 1}. Confirmame si es correcto."
+            estado.fecha_evento = fecha.isoformat()
             estado.fecha_parcial = {"dia": None, "mes": None, "anio": None}
         except ValueError:
             estado.fecha_evento = None
@@ -1184,6 +1197,11 @@ def _parece_confirmacion_cotizacion(message: str) -> bool:
 def _finalizar(respuesta: str, estado: EstadoCotizacion, etapa: str) -> tuple[str, EstadoCotizacion]:
     """Aplica pulido LLM, agrega memoria visible, guarda estado y retorna."""
     estado.etapa = etapa
+    # CONFIRMACION DE FECHA: si el bot asumio algo ("el proximo sabado" = 17/10) lo dice una sola vez.
+    if estado.fecha_requiere_confirmacion and estado.fecha_nota and estado.fecha_evento:
+        respuesta = f"{estado.fecha_nota}\n\n{respuesta}"
+        estado.fecha_requiere_confirmacion = False
+        estado.fecha_nota = None
     respuesta_pulida = pulir_respuesta(respuesta, estado)
     respuesta_con_memoria = f"{respuesta_pulida}\n\n{renderizar_memoria_temporal(estado)}"
     estado.mensajes.append({"role": "assistant", "content": respuesta_con_memoria})
