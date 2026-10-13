@@ -20,9 +20,9 @@ if not st.session_state.get("mayor_edad", False):
     with st.container(border=True, key="portada_edad"):
         st.title("Tus eventos")
         st.caption("Asesoría y cotización de servicios y bebidas para eventos")
-        st.markdown("### Antes de comenzar")
-        st.write("Este servicio incluye bebidas alcohólicas. Confirma que tienes 18 años o más para acceder al chat.")
-        confirmado = st.checkbox("Tengo 18 años o más")
+        st.markdown("### Confirma tu edad")
+        st.write("Este servicio incluye bebidas alcohólicas.")
+        confirmado = st.checkbox("Confirmo que tengo 18 años o más")
         if st.button("Continuar", disabled=not confirmado, use_container_width=True):
             st.session_state.mayor_edad = True
             st.rerun()

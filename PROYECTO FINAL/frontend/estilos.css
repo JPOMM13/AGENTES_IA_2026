@@ -34,12 +34,23 @@ h3 { font-size: 1.1rem !important; font-weight: 600 !important; }
   border: 1px solid #d2d2d7 !important;
   border-radius: 16px;
 }
+.st-key-portada_edad [data-testid="stVerticalBlock"] { gap: .75rem; }
+.st-key-portada_edad [data-testid="stCaptionContainer"] * { color: #616167 !important; }
+.st-key-portada_edad [data-testid="stButton"] button:disabled {
+  background: #f5f5f7 !important;
+  color: #86868b !important;
+}
+.st-key-portada_edad [data-testid="stButton"] button:disabled p { color: #86868b !important; }
 .st-key-portada_edad [data-testid="stButton"] button:not(:disabled) {
   background: #0071e3 !important;
   border-color: #0071e3 !important;
   color: #fff !important;
 }
 .st-key-portada_edad [data-testid="stButton"] button:not(:disabled) p { color: #fff !important; }
+.st-key-portada_edad [data-testid="stCheckbox"]:not([data-selected="true"]) label > div:first-of-type {
+  background: #fff !important;
+  border: 1px solid #86868b !important;
+}
 .st-key-portada_edad [data-testid="stCheckbox"][data-selected="true"] label > div:first-of-type {
   background: #0071e3 !important;
   border-color: #0071e3 !important;
