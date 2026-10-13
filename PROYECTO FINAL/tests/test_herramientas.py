@@ -119,3 +119,20 @@ def test_calendario_bloquea_cruce_aunque_sea_misma_sesion():
 
     assert resultado["ok"] is False
     assert len(resultado["reservas_cruzadas"]) == 1
+
+
+# IMAGEN DE LA COTIZACION: el SVG debe usar el elemento <text> (no <texto>, que no existe en SVG y deja la tarjeta sin textos).
+def test_artefacto_svg_usa_elemento_text_valido(tmp_path, monkeypatch):
+    from pathlib import Path
+
+    import app.artefactos as artefactos
+    from app.artefactos import generar_artefacto_visual_cotizacion
+
+    monkeypatch.setattr(artefactos, "ARTIFACT_DIR", tmp_path)
+    estado = EstadoCotizacion(tipo_evento="matrimonio", asistentes=30, fecha_evento="2027-02-15", distrito="Miraflores")
+    estado.opcion_recomendada = {"id": "CUSTOM", "name": "Cotizacion por productos disponibles", "items": [{"name": "Vino tinto reserva"}]}
+    estado.cotizacion = {"quote_id": "COT-TEST", "total": 587.64, "currency": "PEN", "details": []}
+    ruta = generar_artefacto_visual_cotizacion(estado)
+    contenido = Path(ruta).read_text(encoding="utf-8")
+    assert "<text " in contenido and "<texto" not in contenido
+    assert "Cotizacion por productos disponibles" in contenido and "587.64" in contenido
