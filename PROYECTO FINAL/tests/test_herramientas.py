@@ -119,3 +119,37 @@ def test_calendario_bloquea_cruce_aunque_sea_misma_sesion():
 
     assert resultado["ok"] is False
     assert len(resultado["reservas_cruzadas"]) == 1
+
+
+# IMAGEN MULTIMODAL: apagada por defecto -> SVG local; encendida -> PNG del proveedor (simulado); error -> SVG local.
+def test_imagen_multimodal_apagada_usa_svg_y_encendida_guarda_png(tmp_path, monkeypatch):
+    import base64, io, json
+    from pathlib import Path
+
+    import app.artefactos as artefactos
+    from app.artefactos import generar_artefacto_visual_cotizacion
+
+    monkeypatch.setattr(artefactos, "ARTIFACT_DIR", tmp_path)
+    estado = EstadoCotizacion(tipo_evento="matrimonio", asistentes=30, fecha_evento="2027-02-15", distrito="Miraflores")
+    estado.opcion_recomendada = {"id": "PKG-BAR-100", "name": "Bar movil premium"}
+    estado.cotizacion = {"quote_id": "COT-TEST", "total": 3304.0, "currency": "PEN", "details": []}
+
+    monkeypatch.setenv("IMAGE_GENERATION_ENABLED", "false")
+    assert generar_artefacto_visual_cotizacion(estado).endswith(".svg")
+
+    monkeypatch.setenv("IMAGE_GENERATION_ENABLED", "true")
+    monkeypatch.setenv("IMAGE_API_KEY", "clave-de-prueba")
+    falso_png = base64.b64encode(b"\x89PNG\r\n\x1a\nprueba").decode()
+
+    class RespuestaFalsa(io.BytesIO):
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+
+    monkeypatch.setattr(artefactos, "urlopen", lambda request, timeout=0, context=None: RespuestaFalsa(json.dumps({"data": [{"b64_json": falso_png}]}).encode()))
+    ruta = generar_artefacto_visual_cotizacion(estado)
+    assert ruta.endswith(".png") and Path(ruta).read_bytes().startswith(b"\x89PNG")
+
+    def falla(request, timeout=0, context=None):
+        raise TimeoutError("sin respuesta")
+    monkeypatch.setattr(artefactos, "urlopen", falla)
+    assert generar_artefacto_visual_cotizacion(estado).endswith(".svg")
