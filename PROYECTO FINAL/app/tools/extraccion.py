@@ -430,7 +430,8 @@ def _normalizar_distrito_libre(value: str) -> str | None:
         return None
     if any(alias in candidato_lower for aliases in obtener_aliases_tipos_evento().values() for alias in aliases):
         return None
-    if any(palabra in {"personas", "persona", "asistentes", "cotizacion", "cotización", "evento"} for palabra in palabras):
+    if any(palabra in {"personas", "persona", "asistentes", "cotizacion", "cotización", "evento",
+                       "piso", "pisos"} for palabra in palabras):
         return None
     # Palabras que siguen a "en" pero no son lugares: "en feriados", "en efectivo", "en el piso 3", "en total".
     if palabras[0] in {"feriado", "feriados", "efectivo", "total", "general", "piso", "pisos", "ascensor", "cuotas", "la", "el", "un", "una", "ese", "este", "caso"} and len(palabras) <= 2:
