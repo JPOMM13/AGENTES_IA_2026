@@ -33,6 +33,18 @@ def enviar_mensaje_api(id_sesion: str, mensaje: str) -> dict[str, Any]:
     return _enviar_json("POST", "/api/chat", {"id_sesion": id_sesion, "mensaje": mensaje})
 
 
+def subir_foto_api(id_sesion: str, datos: bytes, nombre: str) -> dict[str, Any]:
+    """Sube la foto del local del cliente (base64) para componer la imagen final de la cotizacion."""
+    import base64
+
+    return _enviar_json("POST", f"/api/sesiones/{id_sesion}/foto", {"imagen_base64": base64.b64encode(datos).decode("ascii"), "nombre": nombre})
+
+
+def url_imagen_api(nombre_archivo: str) -> str:
+    """URL publica de una imagen generada o subida, servida por la API."""
+    return f"{API_BASE_URL}/api/imagenes/{nombre_archivo}"
+
+
 def reiniciar_sesion_api(id_sesion: str) -> dict[str, Any]:
     """Solicita al backend reiniciar la conversacion actual."""
 
