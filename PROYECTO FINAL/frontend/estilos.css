@@ -26,6 +26,25 @@ h3 { font-size: 1.1rem !important; font-weight: 600 !important; }
 [data-testid="stChatMessage"] [data-testid="stCaptionContainer"] * { color: #616167 !important; }
 [data-testid="stChatMessage"] [data-testid="stCaptionContainer"] * { font-size: 12px !important; }
 
+.st-key-portada_edad {
+  max-width: 480px;
+  margin: clamp(3rem, 12vh, 7rem) auto 0;
+  padding: 1.5rem;
+  background: #fff;
+  border: 1px solid #d2d2d7 !important;
+  border-radius: 16px;
+}
+.st-key-portada_edad [data-testid="stButton"] button:not(:disabled) {
+  background: #0071e3 !important;
+  border-color: #0071e3 !important;
+  color: #fff !important;
+}
+.st-key-portada_edad [data-testid="stButton"] button:not(:disabled) p { color: #fff !important; }
+.st-key-portada_edad [data-testid="stCheckbox"][data-selected="true"] label > div:first-of-type {
+  background: #0071e3 !important;
+  border-color: #0071e3 !important;
+}
+
 .st-key-chat_completo {
   background: #fff;
   border: 1px solid #d2d2d7 !important;
