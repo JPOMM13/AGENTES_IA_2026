@@ -14,7 +14,10 @@ GCP_DIR = PROJECT_ROOT / "entrega-john"
 
 # Debe ser el mismo modelo con el que se ingestaron los chunks
 EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "text-embedding-3-small")
-RAG_THRESHOLD = float(os.getenv("RAG_THRESHOLD", "0.40"))
+# UMBRAL: medido con la base v2 (17 chunks). Preguntas reales de politica dan similitud 0.41-0.60 y las que no
+# estan en el documento ("¿atienden en Villa El Salvador?") quedan en 0.0. Con 0.40 "politica de anticipacion"
+# entraba por un pelo (0.41, un solo chunk); 0.30 deja pasar el contexto util sin traer ruido.
+RAG_THRESHOLD = float(os.getenv("RAG_THRESHOLD", "0.30"))
 
 openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
@@ -34,9 +37,23 @@ def preparar_database_url():
     for clave in ("sslrootcert", "sslcert", "sslkey"):
         if not Path(params[clave]).is_absolute():
             params[clave] = str(GCP_DIR / params[clave])
+    # PERMISOS: libpq rechaza una clave privada legible por otros ("has group or world access") y la conexion
+    # falla en silencio hasta agotar el pool (30 s) -> el turno terminaba en error 500. Al clonar el repo o
+    # copiar los certs quedan en 0644, asi que los dejamos en 0600 antes de conectar.
+    _asegurar_permisos_clave_privada(Path(params["sslkey"]))
     params.setdefault("connect_timeout", "10")
     # make_conninfo pone comillas: el espacio de "PROYECTO FINAL" no rompe la conexion
     os.environ["DATABASE_URL"] = make_conninfo(**params)
+
+
+def _asegurar_permisos_clave_privada(ruta_clave: Path) -> None:
+    """Deja la clave cliente en 0600 (requisito de libpq) si existe y es nuestra."""
+    try:
+        if ruta_clave.is_file() and (ruta_clave.stat().st_mode & 0o077):
+            ruta_clave.chmod(0o600)
+    except OSError:
+        # Si no se puede cambiar (p. ej. volumen de solo lectura) se deja que libpq informe el error real.
+        pass
 
 
 preparar_database_url()

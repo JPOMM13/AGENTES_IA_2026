@@ -19,6 +19,7 @@ from app.tools.extraccion import extraer_intencion_y_campos, extraer_productos_m
 from app.tools.derivacion import derivar_whatsapp
 from app.tools.precios import comparar_opciones, generar_cotizacion
 from app.tools.consulta_rag import buscar_rag
+from app.tools.extraccion import es_pregunta_de_servicio
 
 
 REQUIRED_FIELDS = ["tipo_evento", "asistentes", "fecha_evento", "distrito", "nombre_cliente", "contacto", "productos_solicitados"]
@@ -67,7 +68,8 @@ def resolver_memoria_y_elecciones_previas(mensaje_usuario: str, estado: EstadoCo
 # DECISOR AGENTICO: pide al LLM estructurado una accion y luego la pasa por guardrails de decision.
 def decidir_accion_agentica_turno(mensaje_usuario: str, estado: EstadoCotizacion) -> EstadoCotizacion:
     """Usa el decisor LLM estructurado para decidir accion de alto nivel cuando corresponde."""
-    if PATRON_CONSULTA_PISOS.search(mensaje_usuario):
+    # Solo si es una PREGUNTA: "matrimonio de 80 personas en el piso 3 de Miraflores" es un dato, no una consulta.
+    if PATRON_CONSULTA_PISOS.search(mensaje_usuario) and es_pregunta_de_servicio(mensaje_usuario):
         estado.intencion = "consulta_general"
         estado.registrar_log("ruteo_rag_pisos", {"motivo": "consulta_acceso_por_pisos"})
         return estado
@@ -112,7 +114,7 @@ def ejecutar_decision_negocio(mensaje_usuario: str, estado: EstadoCotizacion) ->
         return respuesta, estado, "revision_pedido"
 
     if estado.intencion == "consulta_general":
-        respuesta = renderizar_respuesta_rag(mensaje_usuario)
+        respuesta = renderizar_respuesta_rag(mensaje_usuario, estado)
         return respuesta, estado, "politica"
 
     if estado.intencion == "consulta_precio":
@@ -394,6 +396,10 @@ def manejar_eleccion_previa_pendiente(mensaje_usuario: str, estado: EstadoCotiza
             f"{pedir_campos_faltantes_para_estado(estado) if estado.campos_faltantes else renderizar_respuesta_revision_pedido(estado)}"
         )
         return respuesta, estado
+    # Una pregunta de politica no es una respuesta a "retomar o seguir": se contesta con el RAG (ejecutar_decision_negocio)
+    # y ahi mismo se recuerda que la eleccion sigue pendiente. Antes la compuerta repetia la pregunta y bloqueaba todo.
+    if estado.intencion == "consulta_general":
+        return None
     respuesta = (
         "Antes de avanzar, necesito que me confirmes una cosa: encontre una cotizacion previa asociada a ese contacto. "
         "Puedes decir `retomar la anterior` o `seguir con esta nueva`."
@@ -1168,9 +1174,17 @@ def renderizar_respuesta_derivacion(handoff: dict) -> str:
 
 
 # TOOL RAG: responde politicas o conocimiento de negocio desde el RAG real en Supabase.
-def renderizar_respuesta_rag(query: str) -> str:
-    """Responde consultas de politica usando el RAG real."""
-    return buscar_rag(query)
+def renderizar_respuesta_rag(query: str, estado: EstadoCotizacion | None = None) -> str:
+    """Responde consultas de politica con el RAG (con respaldo local) sin perder el hilo de la cotizacion."""
+    respuesta = buscar_rag(query)
+    if estado is not None:
+        estado.registrar_log("rag_consulta_politica", {"pregunta": query[:120]})
+        if estado.estado_previo_pendiente:
+            respuesta += (
+                "\n\nSigue pendiente: encontre una cotizacion previa con ese contacto. "
+                "Dime `retomar la anterior` o `seguir con esta nueva`."
+            )
+    return respuesta
 
     # RAG LOCAL (desactivado):
     # resultado = buscar_rag(query)
